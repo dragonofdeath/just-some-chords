@@ -26,7 +26,6 @@ export interface Chord {
   idx: number; // position on the circle of fifths (0..11)
   quality: ChordQuality;
   ext?: string; // one of EXTENSIONS; "" / undefined = plain triad
-  sig?: string; // per-measure time signature override; undefined = song's
 }
 
 export const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/8", "7/8", "9/8", "12/8"] as const;
@@ -56,24 +55,6 @@ export function extLabel(ext: string): string {
   return ext === "" ? "triad" : ext;
 }
 
-export interface Section {
-  name: string;
-  chords: Chord[];
-  repeat?: number; // musical repeat: play this part n times (default 1)
-}
-
-export function sectionRepeat(s: Section): number {
-  const r = Math.floor(s.repeat ?? 1);
-  return Math.min(16, Math.max(1, Number.isFinite(r) ? r : 1));
-}
-
-export interface SongData {
-  title: string;
-  songKey: string; // major key name, e.g. "G"
-  bpm: number;
-  timeSignature: string;
-  sections: { list: Section[] };
-}
 
 const ROMAN_MAJ: Record<number, string> = { 0: "I", 1: "V", 11: "IV" };
 const ROMAN_MIN: Record<number, string> = { 0: "vi", 1: "iii", 11: "ii" };
@@ -88,6 +69,34 @@ export function chordLabel(c: Chord): string {
   if (ext === "sus2" || ext === "sus4") return root + ext; // sus replaces the third
   if (c.quality === "min" && ext === "maj7") return base + "(maj7)";
   return base + ext; // G7, Gmaj7, Am7, G6, Gadd9, G9 …
+}
+
+// Chord tones as semitone offsets from C4: [root, third, fifth, top]
+// (top = extension tone when present, else the octave). Used by arpeggios.
+export function chordToneSemis(c: Chord): number[] {
+  const pc = chordPitchClass(c);
+  const ext = c.ext ?? "";
+  let third = c.quality === "min" ? 3 : 4;
+  let fifth = 7;
+  let top: number | null = null;
+  switch (ext) {
+    case "7": top = 10; break;
+    case "maj7": top = 11; break;
+    case "6": top = 9; break;
+    case "9": top = 14; break;
+    case "add9": top = 14; break;
+    case "sus2": third = 2; break;
+    case "sus4": third = 5; break;
+    case "dim": third = 3; fifth = 6; break;
+  }
+  return [pc, pc + third, pc + fifth, pc + (top ?? 12)];
+}
+
+// Bass register: root voiced into E1..D#2 (midi 28–39); fifth sits above it.
+export function bassMidi(c: Chord, tone: 0 | 2): number {
+  const pc = chordPitchClass(c);
+  const root = 28 + ((pc - 4 + 12) % 12);
+  return tone === 2 ? root + 7 : root;
 }
 
 // Semitone offsets from C4 for the full voicing (bass + chord tones).
@@ -139,12 +148,3 @@ export const SECTION_NAMES = [
   "Outro",
 ];
 
-export function emptySong(): SongData {
-  return {
-    title: "Untitled",
-    songKey: "G",
-    bpm: 84,
-    timeSignature: "4/4",
-    sections: { list: [{ name: "Verse", chords: [] }, { name: "Chorus", chords: [] }] },
-  };
-}

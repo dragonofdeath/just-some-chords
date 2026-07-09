@@ -1,37 +1,89 @@
 import { useEffect, useRef, useState } from "react";
-import { INSTRUMENTS, ensureLoaded, instrumentLabel, preload, type Instrument } from "../lib/sampler";
-import { clickAt, ensureCtx, killBus, playChordAt } from "../lib/audio";
+import { ensureLoaded, preload, type Instrument } from "../lib/sampler";
+import { clickAt, ensureCtx, killBus, playChordAt, playMidiAt } from "../lib/audio";
+import { playDrum } from "../lib/drums";
+import { buildTimeline } from "../lib/timeline";
 import {
-  EXTENSIONS,
+  clampRepeat,
+  emptyDoc,
+  isSongDoc,
+  mapLine,
+  mapMeasure,
+  mapPart,
+  measureAt,
+  migrateSong,
+  newPartId,
+  newPatternId,
+  partAt,
+  withSlotCount,
+  type Pos,
+  type SongDocV2,
+} from "../lib/songModel";
+import {
   FIFTHS,
-  SECTION_NAMES,
   TIME_SIGNATURES,
-  barSeconds,
-  beatSeconds,
+  bassMidi,
   chordLabel,
-  chordRoman,
   chordSemis,
-  emptySong,
-  extLabel,
+  chordToneSemis,
   isInKey,
   keyIdxFromName,
-  parseSig,
-  sectionRepeat,
   type Chord,
-  type SongData,
 } from "../lib/theory";
+import PartView, { type Sel } from "./PartView";
+import EditMeasureSheet from "./sheets/EditMeasureSheet";
+import SoundSheet from "./sheets/SoundSheet";
+import PatternEditorSheet from "./sheets/PatternEditorSheet";
+import { AddPartSheet, LineSheet, PartSheet } from "./sheets/PartSheet";
+import Sheet from "./sheets/Sheet";
 
-interface SavedSong extends SongData {
+interface SavedSong {
   _id?: string;
   shareId?: string;
+  title: string;
+  songKey: string;
+  bpm: number;
+  timeSignature: string;
+  sections: SongDocV2;
 }
 
 interface Props {
   songId: string; // "new" or an existing item id
-  initialSong: SavedSong | null;
+  initialSong: (Omit<SavedSong, "sections"> & { sections: any }) | null;
   // "shared": opened from a public share link — an unsaved copy of someone's
   // song; saving forks it into the visitor's own songbook.
   source?: "member" | "shared";
+}
+
+const DRAFT_KEY = "jsc-draft";
+
+function newSong(): SavedSong {
+  return { title: "Untitled", songKey: "G", bpm: 84, timeSignature: "4/4", sections: emptyDoc() };
+}
+
+function normalize(raw: any): SavedSong {
+  return {
+    _id: raw?._id,
+    shareId: raw?.shareId,
+    title: typeof raw?.title === "string" ? raw.title : "Untitled",
+    songKey: typeof raw?.songKey === "string" ? raw.songKey : "G",
+    bpm: typeof raw?.bpm === "number" ? raw.bpm : 84,
+    timeSignature: typeof raw?.timeSignature === "string" ? raw.timeSignature : "4/4",
+    sections: migrateSong(raw?.sections),
+  };
+}
+
+function readDraft(): { song: SavedSong; pendingSave?: boolean } | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    const sec = d?.song?.sections;
+    if (!sec || (!isSongDoc(sec) && !Array.isArray(sec.list))) return null;
+    return { song: normalize(d.song), pendingSave: d.pendingSave };
+  } catch {
+    return null;
+  }
 }
 
 // ---------- wheel geometry ----------
@@ -47,42 +99,22 @@ function wedgePath(cx: number, cy: number, r1: number, r2: number, a0: number, a
   return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r2} ${r2} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)} L${x2.toFixed(2)} ${y2.toFixed(2)} A${r1} ${r1} 0 0 0 ${x3.toFixed(2)} ${y3.toFixed(2)} Z`;
 }
 
-interface PlayPos {
-  si: number;
-  ci: number;
-}
-
-const DRAFT_KEY = "jsc-draft";
-
-function readDraft(): { song: SavedSong; pendingSave?: boolean } | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    const d = JSON.parse(raw);
-    return d?.song?.sections?.list ? d : null;
-  } catch {
-    return null;
-  }
-}
+type EditTarget = { pos: Pos; slot: number };
 
 export default function SongEditor({ songId, initialSong, source = "member" }: Props) {
   const [song, setSong] = useState<SavedSong>(() => {
-    // A new song prefers a stashed draft — work saved right before a login
-    // redirect. A shared song always shows the shared content, never a draft.
     if (songId === "new" && source !== "shared") {
       const d = readDraft();
       if (d) return d.song;
     }
-    return initialSong ?? emptySong();
+    return initialSong ? normalize(initialSong) : newSong();
   });
   const [itemId, setItemId] = useState<string | null>(songId === "new" ? null : songId);
-  const [activeSection, setActiveSection] = useState(0);
   const [dirty, setDirty] = useState(songId === "new");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [playPos, setPlayPos] = useState<PlayPos | null>(null);
-  const [metronome, setMetronome] = useState(false);
+  const [playPos, setPlayPos] = useState<Pos | null>(null);
   const [instrument, setInstrument] = useState<Instrument>(() => {
     try {
       const v = localStorage.getItem("jsc-instrument");
@@ -91,26 +123,99 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       return "piano";
     }
   });
-  const [editTarget, setEditTarget] = useState<PlayPos | null>(null);
-  const [sectionTarget, setSectionTarget] = useState<number | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [active, setActive] = useState<{ ai: number; li: number }>({ ai: 0, li: 0 });
+  const [sel, setSel] = useState<Sel | null>(null);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [partSheet, setPartSheet] = useState<number | null>(null);
+  const [lineSheet, setLineSheet] = useState<{ ai: number; li: number } | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [soundOpen, setSoundOpen] = useState(false);
+  const [patternOpen, setPatternOpen] = useState<null | "song" | "measure">(null);
   const [sigOpen, setSigOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  // Selection: a single chord (a === b) or a range within one section.
-  const [sel, setSel] = useState<{ si: number; a: number; b: number } | null>(null);
+  const [, setHistVer] = useState(0); // re-render undo/redo disabled state
+
   const playTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const playBus = useRef<GainNode | null>(null); // master bus for the current play run
-  const sectionRefs = useRef<Array<HTMLElement | null>>([]);
+  const playBus = useRef<GainNode | null>(null);
+  const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const past = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
+  const future = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
+  const lastEdit = useRef<{ tag?: string; at: number }>({ at: 0 });
 
+  const doc = song.sections;
   const keyIdx = keyIdxFromName(song.songKey);
-  const sections = song.sections.list;
 
-  const edit = (fn: (s: SavedSong) => SavedSong) => {
-    setSong((s) => fn(s));
+  // ---------- history ----------
+  const snapshot = (s: SavedSong) => ({
+    title: s.title,
+    songKey: s.songKey,
+    bpm: s.bpm,
+    timeSignature: s.timeSignature,
+    sections: s.sections,
+  });
+
+  const edit = (fn: (s: SavedSong) => SavedSong, tag?: string) => {
+    setSong((s) => {
+      const coalesce = !!tag && lastEdit.current.tag === tag && Date.now() - lastEdit.current.at < 800;
+      if (!coalesce) {
+        past.current.push(snapshot(s));
+        if (past.current.length > 100) past.current.shift();
+        future.current = [];
+      }
+      lastEdit.current = { tag, at: Date.now() };
+      return fn(s);
+    });
     setDirty(true);
+    setHistVer((v) => v + 1);
   };
 
+  const editDoc = (fn: (d: SongDocV2) => SongDocV2, tag?: string) =>
+    edit((s) => ({ ...s, sections: fn(s.sections) }), tag);
+
+  const undo = () => {
+    const prev = past.current.pop();
+    if (!prev) return;
+    lastEdit.current = { at: 0 };
+    setSong((s) => {
+      future.current.push(snapshot(s));
+      return { ...s, ...prev };
+    });
+    setSel(null);
+    setEditTarget(null);
+    setDirty(true);
+    setHistVer((v) => v + 1);
+  };
+
+  const redo = () => {
+    const next = future.current.pop();
+    if (!next) return;
+    lastEdit.current = { at: 0 };
+    setSong((s) => {
+      past.current.push(snapshot(s));
+      return { ...s, ...next };
+    });
+    setSel(null);
+    setEditTarget(null);
+    setDirty(true);
+    setHistVer((v) => v + 1);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ---------- lifecycle ----------
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (dirty) e.preventDefault();
@@ -121,10 +226,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
 
   useEffect(() => () => stop(), []);
 
-  // If a draft was stashed mid-save (anonymous user sent to login), finish the
-  // save now that we're back. The flag is cleared FIRST so a still-anonymous
-  // visitor (login canceled) isn't bounced in a redirect loop — the draft
-  // content itself stays until a save succeeds.
+  // Finish a save that was interrupted by the login redirect (see save()).
   useEffect(() => {
     if (songId !== "new" || source === "shared") return;
     const d = readDraft();
@@ -137,136 +239,60 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     save(d.song);
   }, []);
 
-  // Start downloading sample bytes right away; decode happens on first sound.
   useEffect(() => {
     preload(instrument);
+    if (doc.playback?.bass) preload("bass");
     try {
       localStorage.setItem("jsc-instrument", instrument);
     } catch {
       // private mode etc. — preference just won't persist
     }
-  }, [instrument]);
+  }, [instrument, doc.playback?.bass]);
 
-  const cycleInstrument = () => {
-    const next = INSTRUMENTS[(INSTRUMENTS.indexOf(instrument) + 1) % INSTRUMENTS.length];
-    setInstrument(next);
-    ensureLoaded(ensureCtx(), next); // user gesture — decode now so the next tap is sampled
-  };
-
-  const updateChords = (si: number, fn: (chords: Chord[]) => Chord[]) => {
-    edit((s) => {
-      const list = s.sections.list.map((sec, i) => (i === si ? { ...sec, chords: fn(sec.chords) } : sec));
-      return { ...s, sections: { list } };
-    });
-  };
-
+  // ---------- structural edits ----------
   const tapChord = (idx: number, quality: "maj" | "min") => {
     const chord: Chord = { idx, quality };
     playChordAt(chordSemis(chord), 0, 1.2, instrument);
-    if ((sections[activeSection]?.chords.length ?? 0) >= 16) return;
-    updateChords(activeSection, (chords) => [...chords, chord]);
-  };
-
-  const setChordExt = (pos: PlayPos, ext: string) => {
-    const chord: Chord = { ...sections[pos.si].chords[pos.ci], ext: ext || undefined };
-    playChordAt(chordSemis(chord), 0, 1.2, instrument);
-    updateChords(pos.si, (chords) => chords.map((c, i) => (i === pos.ci ? chord : c)));
-  };
-
-  const setChordSig = (pos: PlayPos, sig: string | undefined) => {
-    updateChords(pos.si, (chords) =>
-      chords.map((c, i) => (i === pos.ci ? { ...c, sig: sig || undefined } : c))
+    if (editTarget) {
+      // sheet is open — replace the selected slot instead of appending
+      editDoc((d) =>
+        mapMeasure(d, editTarget.pos, (m) => ({
+          ...m,
+          slots: m.slots.map((s, i) => (i === editTarget.slot ? chord : s)),
+        }))
+      );
+      return;
+    }
+    editDoc((d) =>
+      mapLine(d, active.ai, active.li, (line) =>
+        line.measures.length >= 32 ? line : { ...line, measures: [...line.measures, { slots: [chord] }] }
+      )
     );
   };
 
-  const removeChord = (pos: PlayPos) => {
-    updateChords(pos.si, (chords) => chords.filter((_, i) => i !== pos.ci));
-    setEditTarget(null);
-    setSel(null);
-  };
-
-  // Tap to select; tap another chord in the same part to extend the range;
-  // tap inside the current selection to clear it.
-  const tapChip = (si: number, ci: number) => {
-    setActiveSection(si);
+  const tapMeasure = (ai: number, li: number, mi: number) => {
+    setActive({ ai, li });
     setSel((cur) => {
-      if (!cur || cur.si !== si) return { si, a: ci, b: ci };
-      if (ci >= cur.a && ci <= cur.b) return null;
-      return { si, a: Math.min(cur.a, ci), b: Math.max(cur.b, ci) };
+      if (!cur || cur.ai !== ai || cur.li !== li) return { ai, li, a: mi, b: mi };
+      if (mi >= cur.a && mi <= cur.b) return null;
+      return { ai, li, a: Math.min(cur.a, mi), b: Math.max(cur.b, mi) };
     });
-  };
-
-  const addSection = () => {
-    const used = new Set(sections.map((s) => s.name));
-    const name = SECTION_NAMES.find((n) => !used.has(n)) ?? `Part ${sections.length + 1}`;
-    edit((s) => ({ ...s, sections: { list: [...s.sections.list, { name, chords: [] }] } }));
-    setActiveSection(sections.length);
-  };
-
-  const renameSection = (si: number, name: string) => {
-    edit((s) => ({
-      ...s,
-      sections: { list: s.sections.list.map((sec, i) => (i === si ? { ...sec, name } : sec)) },
-    }));
-  };
-
-  const moveSection = (si: number, dir: -1 | 1) => {
-    setSel(null);
-    const to = si + dir;
-    if (to < 0 || to >= sections.length) return;
-    edit((s) => {
-      const list = [...s.sections.list];
-      [list[si], list[to]] = [list[to], list[si]];
-      return { ...s, sections: { list } };
-    });
-    setActiveSection(to);
-    setSectionTarget(to);
-  };
-
-  const duplicateSection = (si: number) => {
-    setSel(null);
-    edit((s) => {
-      const src = s.sections.list[si];
-      const copy = { ...src, name: `${src.name} 2`, chords: src.chords.map((c) => ({ ...c })) };
-      const list = [...s.sections.list];
-      list.splice(si + 1, 0, copy);
-      return { ...s, sections: { list } };
-    });
-    setActiveSection(si + 1);
-    setSectionTarget(si + 1);
-  };
-
-  const setRepeat = (si: number, delta: number) => {
-    edit((s) => ({
-      ...s,
-      sections: {
-        list: s.sections.list.map((sec, i) =>
-          i === si
-            ? { ...sec, repeat: Math.min(16, Math.max(1, sectionRepeat(sec) + delta)) }
-            : sec
-        ),
-      },
-    }));
-  };
-
-  const removeSection = (si: number) => {
-    if (sections.length <= 1) return; // a song keeps at least one part
-    setSel(null);
-    edit((s) => ({ ...s, sections: { list: s.sections.list.filter((_, i) => i !== si) } }));
-    setActiveSection((a) => Math.max(0, a > si ? a - 1 : Math.min(a, sections.length - 2)));
-    setSectionTarget(null);
   };
 
   const rotateKey = (dir: 1 | -1) => {
     const next = ((keyIdx + dir) % 12 + 12) % 12;
-    edit((s) => ({ ...s, songKey: FIFTHS[next].maj }));
+    edit((s) => ({ ...s, songKey: FIFTHS[next].maj }), "key");
   };
 
+  const clearTransient = () => {
+    setSel(null);
+    setEditTarget(null);
+  };
+
+  // ---------- playback ----------
   const stop = () => {
     if (playTimer.current) clearTimeout(playTimer.current);
     playTimer.current = null;
-    // Kill everything scheduled on this run's bus — sources may be booked
-    // minutes ahead, so silencing the bus is what actually stops the sound.
     killBus(playBus.current);
     playBus.current = null;
     setPlaying(false);
@@ -276,105 +302,87 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const togglePlay = async () => {
     if (playing) return stop();
     const ctx = ensureCtx();
+    const loopMode = !!sel && sel.b > sel.a;
+    const tl = buildTimeline(doc, {
+      bpm: song.bpm,
+      sig: song.timeSignature,
+      loop: loopMode ? { ai: sel!.ai, li: sel!.li, a: sel!.a, b: sel!.b } : undefined,
+      startPos: !loopMode && sel ? { ai: sel.ai, li: sel.li, mi: sel.a } : undefined,
+      countIn: doc.playback?.countIn === true,
+    });
+    if (!tl.ticks.length) return;
     // Give samples up to 2s to decode; past that, play starts on the synth.
-    await Promise.race([ensureLoaded(ctx, instrument), new Promise((r) => setTimeout(r, 2000))]);
+    const wanted: Promise<void>[] = [ensureLoaded(ctx, instrument)];
+    if (doc.playback?.bass) wanted.push(ensureLoaded(ctx, "bass"));
+    await Promise.race([Promise.all(wanted), new Promise((r) => setTimeout(r, 2000))]);
     if (playBus.current) stop(); // a second tap raced the decode — reset first
+
     const bus = ctx.createGain();
     bus.gain.value = 1;
     bus.connect(ctx.destination);
     playBus.current = bus;
-    // Each chord fills one measure; the measure's own signature (or the
-    // song's) sets its length. BPM is the quarter-note tempo throughout.
-    const sigOf = (c: Chord) => c.sig ?? song.timeSignature;
-    const barDurOf = (c: Chord) => barSeconds(sigOf(c), song.bpm);
-    const scheduleBar = (chord: Chord, atAbs: number) => {
-      const rel = atAbs - ctx.currentTime;
-      const { n, d } = parseSig(sigOf(chord));
-      const beat = beatSeconds(sigOf(chord), song.bpm);
-      playChordAt(chordSemis(chord), rel, n * beat * 0.95, instrument, bus);
-      if (metronome) {
-        const compound = d === 8 && n % 3 === 0;
-        for (let b = 0; b < n; b++) {
-          clickAt(rel + b * beat, compound ? b % 3 === 0 : b === 0, bus);
+    const t0 = ctx.currentTime + 0.08;
+
+    const scheduleEvent = (ev: (typeof tl.events)[number], offset: number) => {
+      const rel = t0 + offset + ev.tSec - ctx.currentTime;
+      switch (ev.kind) {
+        case "block":
+          playChordAt(chordSemis(ev.chord!), rel, ev.dur, instrument, bus);
+          break;
+        case "arp": {
+          const semi = chordToneSemis(ev.chord!)[ev.tone ?? 0];
+          const midi = 60 + semi + (instrument === "guitar" ? -12 : 0);
+          playMidiAt(midi, rel, ev.dur, instrument, ev.accent ? 0.5 : 0.36, bus);
+          break;
         }
+        case "bass":
+          playMidiAt(bassMidi(ev.chord!, (ev.tone ?? 0) as 0 | 2), rel, ev.dur, "bass", ev.accent ? 0.62 : 0.5, bus);
+          break;
+        case "drum":
+          playDrum(ctx, ev.drum!, rel, !!ev.accent, bus);
+          break;
+        case "click":
+          clickAt(rel, !!ev.accent, bus);
+          break;
       }
     };
 
-    // A selected RANGE loops forever (until stop). Audio is scheduled one pass
-    // ahead of the pass that's sounding, against an absolute clock (no drift).
-    if (sel && sel.b > sel.a) {
-      const loop = sections[sel.si].chords.slice(sel.a, sel.b + 1);
-      const len = loop.length;
-      if (!len) return stop();
-      const durs = loop.map(barDurOf);
-      const passDur = durs.reduce((s, v) => s + v, 0);
-      const t0 = ctx.currentTime + 0.06;
-      const schedulePass = (p: number) => {
-        let at = t0 + p * passDur;
-        loop.forEach((c) => {
-          scheduleBar(c, at);
-          at += barDurOf(c);
-        });
-      };
-      schedulePass(0);
-      schedulePass(1);
-      setPlaying(true);
-      let g = 0;
-      const tick = () => {
-        const i = g % len;
-        if (i === 0 && g > 0) schedulePass(g / len + 1);
-        setPlayPos({ si: sel.si, ci: sel.a + i });
-        g++;
-        playTimer.current = setTimeout(tick, durs[i] * 1000);
-      };
-      tick();
-      return;
-    }
+    tl.events.forEach((ev) => scheduleEvent(ev, 0));
+    const musicEvents = tl.events.filter((ev) => ev.tSec >= tl.musicStart - 1e-6);
+    if (loopMode) musicEvents.forEach((ev) => scheduleEvent(ev, tl.passDur)); // pass 1 pre-scheduled
 
-    // Otherwise play linearly: every section in order, honoring repeats, one
-    // bar per chord — starting from the selected chord when there is one.
-    const steps: Array<{ si: number; ci: number; chord: Chord }> = [];
-    sections.forEach((sec, si) => {
-      for (let r = 0; r < sectionRepeat(sec); r++) {
-        sec.chords.forEach((chord, ci) => steps.push({ si, ci, chord }));
-      }
-    });
-    let startIdx = 0;
-    if (sel) {
-      const found = steps.findIndex((st) => st.si === sel.si && st.ci === sel.a);
-      if (found >= 0) startIdx = found;
-    }
-    const playSteps = steps.slice(startIdx);
-    if (!playSteps.length) return stop();
-    const t0 = ctx.currentTime + 0.06;
-    const durs: number[] = [];
-    let at = t0;
-    playSteps.forEach((st) => {
-      scheduleBar(st.chord, at);
-      const bd = barDurOf(st.chord);
-      durs.push(bd);
-      at += bd;
-    });
     setPlaying(true);
-    let step = 0;
+    let k = 0;
+    let pass = 0;
     const tick = () => {
-      if (step >= playSteps.length) return stop();
-      const st = playSteps[step];
-      setPlayPos({ si: st.si, ci: st.ci });
-      sectionRefs.current[st.si]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      const bd = durs[step];
-      step++;
-      playTimer.current = setTimeout(tick, bd * 1000);
+      const t = tl.ticks[k];
+      setPlayPos(t.pos);
+      rowRefs.current.get(`${t.pos.ai}:${t.pos.li}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      let delaySec: number;
+      if (k + 1 < tl.ticks.length) {
+        delaySec = tl.ticks[k + 1].tSec - t.tSec;
+        k++;
+      } else if (loopMode) {
+        delaySec = tl.total - t.tSec;
+        k = 0;
+        pass++;
+        musicEvents.forEach((ev) => scheduleEvent(ev, (pass + 1) * tl.passDur)); // keep one pass ahead
+      } else {
+        playTimer.current = setTimeout(stop, (tl.total - t.tSec) * 1000);
+        return;
+      }
+      playTimer.current = setTimeout(tick, delaySec * 1000);
     };
-    tick();
+    playTimer.current = setTimeout(tick, (tl.ticks[0].tSec + 0.08) * 1000);
   };
 
+  // ---------- save / share ----------
   const save = async (override?: SavedSong) => {
     if (saving) return false;
     const src = override ?? song;
     setSaving(true);
     setSaveError(null);
-    const payload: SavedSong = {
+    const payload = {
       title: src.title.trim() || "Untitled",
       songKey: src.songKey,
       bpm: src.bpm,
@@ -389,8 +397,6 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         body: JSON.stringify(payload),
       });
       if (res.status === 401 || res.status === 403) {
-        // Not logged in: stash the work so it survives the login round-trip,
-        // then come back to /songs/new where the pending save auto-completes.
         if (!itemId) {
           try {
             localStorage.setItem(DRAFT_KEY, JSON.stringify({ song: src, pendingSave: true }));
@@ -413,7 +419,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         try {
           localStorage.removeItem(DRAFT_KEY);
         } catch {
-          // storage unavailable — stale draft is harmless
+          // stale draft is harmless
         }
       }
       setDirty(false);
@@ -426,7 +432,9 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     }
   };
 
-  const shareUrl = song.shareId ? `${typeof window !== "undefined" ? window.location.origin : ""}/s/${song.shareId}` : null;
+  const shareUrl = song.shareId
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/s/${song.shareId}`
+    : null;
 
   const setSharing = async (on: boolean) => {
     if (shareBusy) return;
@@ -438,7 +446,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     const next = { ...song, shareId };
     setSong(next);
     const ok = await save(next);
-    if (!ok) setSong(song); // save failed — roll the toggle back
+    if (!ok) setSong(song);
     setShareBusy(false);
   };
 
@@ -449,11 +457,25 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // clipboard blocked — the URL is visible to select manually
+      // clipboard blocked — the URL is selectable
     }
   };
 
-  // ---------- wheel (rebuilt each render; 24 wedges is cheap) ----------
+  // ---------- pattern save ----------
+  const savePattern = (name: string, steps: string) => {
+    const forMeasure = patternOpen === "measure" && editTarget;
+    editDoc((d) => {
+      const id = newPatternId(d);
+      const withPat: SongDocV2 = { ...d, patterns: { ...(d.patterns ?? {}), [id]: { name, steps } } };
+      if (forMeasure) {
+        return mapMeasure(withPat, editTarget!.pos, (m) => ({ ...m, pat: id }));
+      }
+      return { ...withPat, playback: { ...(withPat.playback ?? {}), pattern: id } };
+    });
+    setPatternOpen(null);
+  };
+
+  // ---------- wheel ----------
   const renderWheel = () => {
     const size = 300;
     const cx = size / 2;
@@ -467,15 +489,13 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       const rel = ((i - keyIdx) % 12 + 12) % 12;
       const inKey = isInKey(i, keyIdx);
       const aMid = rel * 30;
-      const a0 = aMid - 14.4;
-      const a1 = aMid + 14.4;
       for (const ring of rings) {
         const label = ring.q === "min" ? FIFTHS[i].min : FIFTHS[i].maj;
         const [lx, ly] = polar(cx, cy, (ring.r1 + ring.r2) / 2, aMid);
         wedges.push(
           <g key={`${i}-${ring.q}`}>
             <path
-              d={wedgePath(cx, cy, ring.r1, ring.r2, a0, a1)}
+              d={wedgePath(cx, cy, ring.r1, ring.r2, aMid - 14.4, aMid + 14.4)}
               className={`wedge ${inKey ? "wedge-in" : "wedge-out"} wedge-${ring.q}`}
               role="button"
               tabIndex={0}
@@ -508,17 +528,15 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Circle of fifths chord wheel">
         {wedges}
         <circle cx={cx} cy={cy} r={48} className="hub" />
-        <text x={cx} y={cy - 2} textAnchor="middle" className="hub-key">
-          {FIFTHS[keyIdx].maj}
-        </text>
-        <text x={cx} y={cy + 16} textAnchor="middle" className="hub-sub">
-          MAJOR
-        </text>
+        <text x={cx} y={cy - 2} textAnchor="middle" className="hub-key">{FIFTHS[keyIdx].maj}</text>
+        <text x={cx} y={cy + 16} textAnchor="middle" className="hub-sub">MAJOR</text>
       </svg>
     );
   };
 
-  const editChord = editTarget ? sections[editTarget.si]?.chords[editTarget.ci] : null;
+  const editMeasure = editTarget ? measureAt(doc, editTarget.pos) : null;
+  const selMeasure = sel && sel.a === sel.b ? measureAt(doc, { ai: sel.ai, li: sel.li, mi: sel.a }) : null;
+  const countIn = doc.playback?.countIn === true;
 
   return (
     <div className="editor">
@@ -531,20 +549,17 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         <input
           className="title-input"
           value={song.title}
-          onChange={(e) => edit((s) => ({ ...s, title: e.target.value }))}
+          onChange={(e) => edit((s) => ({ ...s, title: e.target.value }), "title")}
           aria-label="Song title"
         />
+        <button className="hist-btn" onClick={undo} disabled={!past.current.length} aria-label="Undo">↶</button>
+        <button className="hist-btn" onClick={redo} disabled={!future.current.length} aria-label="Redo">↷</button>
         {(source !== "shared" || itemId) && (
-        <button
-          className="share-btn"
-          onClick={() => setShareOpen(true)}
-          aria-label="Share song"
-          title="Share song"
-        >
-          <svg width="17" height="17" viewBox="0 0 17 17">
-            <path d="M8.5 1.5v9M5 4.5l3.5-3 3.5 3M3.5 8v6h10V8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
+          <button className="share-btn" onClick={() => setShareOpen(true)} aria-label="Share song" title="Share song">
+            <svg width="17" height="17" viewBox="0 0 17 17">
+              <path d="M8.5 1.5v9M5 4.5l3.5-3 3.5 3M3.5 8v6h10V8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         )}
         <button className="save-btn" onClick={() => save()} disabled={saving || !dirty}>
           {saving ? "Saving…" : dirty ? "Save" : "Saved"}
@@ -563,83 +578,43 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
 
       <div className="wheelbox">{renderWheel()}</div>
 
-      <div className="sections-scroll">
-        {sections.map((sec, si) => (
-          <section
-            key={si}
-            ref={(el) => {
-              sectionRefs.current[si] = el;
-            }}
-            className={`section-block ${si === activeSection ? "sb-active" : ""} ${playing && playPos?.si === si ? "sb-playing" : ""}`}
-            onClick={() => setActiveSection(si)}
-          >
-            <div className="sb-head">
-              <span className="sb-title-row">
-                {sectionRepeat(sec) > 1 && <span className="sb-repeat">{sectionRepeat(sec)}×</span>}
-                <span className="sb-name">{sec.name}</span>
-              </span>
-              <span className="sb-side">
-                <span className="sb-meta">
-                  {si === activeSection ? "adding here" : `${sec.chords.length} chords`}
-                </span>
-                <button
-                  className="sb-more"
-                  aria-label={`Edit part ${sec.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveSection(si);
-                    setSectionTarget(si);
-                  }}
-                >
-                  ⋯
-                </button>
-              </span>
-            </div>
-            <div className="chips">
-              {sec.chords.length === 0 && (
-                <span className="empty">{si === activeSection ? "Tap the wheel to add chords" : "Empty"}</span>
-              )}
-              {sec.chords.map((c, ci) => {
-                const selected = sel?.si === si && ci >= sel.a && ci <= sel.b;
-                return (
-                  <button
-                    key={ci}
-                    className={`chip ${selected ? "chip-selected" : ""} ${playing && playPos?.si === si && playPos?.ci === ci ? "chip-playing" : ""}`}
-                    title="Tap to select"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      tapChip(si, ci);
-                    }}
-                  >
-                    <span className="c-name">{chordLabel(c)}</span>
-                    <span className="c-roman">
-                      {chordRoman(c, keyIdx)}
-                      {c.sig ? ` · ${c.sig}` : ""}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-        {sections.length < 10 && (
-          <button className="add-section" onClick={addSection}>＋ Add section</button>
-        )}
-      </div>
+      <PartView
+        doc={doc}
+        keyIdx={keyIdx}
+        sel={sel}
+        playPos={playPos}
+        playing={playing}
+        active={active}
+        registerRow={(ai, li, el) => {
+          if (el) rowRefs.current.set(`${ai}:${li}`, el);
+          else rowRefs.current.delete(`${ai}:${li}`);
+        }}
+        onTapMeasure={tapMeasure}
+        onTapLine={(ai, li) => setActive({ ai, li })}
+        onOpenPart={(ai) => {
+          setActive({ ai, li: 0 });
+          setPartSheet(ai);
+        }}
+        onOpenLine={(ai, li) => {
+          setActive({ ai, li });
+          setLineSheet({ ai, li });
+        }}
+        onAdd={() => setAddOpen(true)}
+      />
 
-      {sel && sections[sel.si] && sel.b < sections[sel.si].chords.length && (
+      {sel && (
         <div className="sel-bar">
           <span className="sel-info">
             {sel.a === sel.b
-              ? `${chordLabel(sections[sel.si].chords[sel.a])} — play starts here`
-              : `${sel.b - sel.a + 1} chords — play loops this range`}
+              ? `${selMeasure ? selMeasure.slots.map((s) => (s ? chordLabel(s) : "—")).join(" / ") : "measure"} — play starts here`
+              : `${sel.b - sel.a + 1} measures — play loops this range`}
           </span>
           {sel.a === sel.b && (
             <button
               className="sel-edit"
-              onClick={() => setEditTarget({ si: sel.si, ci: sel.a })}
+              onClick={() => setEditTarget({ pos: { ai: sel.ai, li: sel.li, mi: sel.a }, slot: 0 })}
             >
-              Edit chord
+              Edit measure
             </button>
           )}
           <button className="sel-clear" onClick={() => setSel(null)} aria-label="Clear selection">✕</button>
@@ -655,228 +630,297 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           )}
         </button>
         <button
-          className={`metro-btn ${metronome ? "metro-on" : ""}`}
-          onClick={() => setMetronome((m) => !m)}
-          aria-pressed={metronome}
-          aria-label="Toggle metronome"
+          className={`metro-btn ${countIn ? "metro-on" : ""}`}
+          onClick={() => editDoc((d) => ({ ...d, playback: { ...(d.playback ?? {}), countIn: !countIn } }))}
+          aria-pressed={countIn}
+          aria-label="Toggle count-in"
+          title="Count-in"
         >
-          <svg width="18" height="18" viewBox="0 0 18 18">
-            <path d="M6 2h6l2.5 13.5H3.5L6 2z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-            <line x1="9" y1="12" x2="12.2" y2="4.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
+          <span className="countin-label">1·2</span>
         </button>
-        <button className="inst-btn" onClick={cycleInstrument} aria-label="Switch instrument">
-          {instrumentLabel(instrument)}
+        <button className="inst-btn" onClick={() => setSoundOpen(true)} aria-label="Sound settings">
+          Sound
         </button>
         <div className="t-meta">
           <div className="t-bpm">
-            <button className="bpm-btn" onClick={() => edit((s) => ({ ...s, bpm: Math.max(40, s.bpm - 4) }))} aria-label="Slower">−</button>
+            <button className="bpm-btn" onClick={() => edit((s) => ({ ...s, bpm: Math.max(40, s.bpm - 4) }), "bpm")} aria-label="Slower">−</button>
             <span>{song.bpm} BPM</span>
-            <button className="bpm-btn" onClick={() => edit((s) => ({ ...s, bpm: Math.min(220, s.bpm + 4) }))} aria-label="Faster">+</button>
+            <button className="bpm-btn" onClick={() => edit((s) => ({ ...s, bpm: Math.min(220, s.bpm + 4) }), "bpm")} aria-label="Faster">+</button>
           </div>
           <span className="t-sig-row">
             <button className="t-sig-btn" onClick={() => setSigOpen(true)} aria-label="Change time signature">
               {song.timeSignature}
             </button>
-            {metronome && <span className="t-sig">· click on</span>}
           </span>
         </div>
       </footer>
 
+      {editTarget && editMeasure && (
+        <EditMeasureSheet
+          doc={doc}
+          pos={editTarget.pos}
+          slot={Math.min(editTarget.slot, editMeasure.slots.length - 1)}
+          measure={editMeasure}
+          keyIdx={keyIdx}
+          songSig={song.timeSignature}
+          songPattern={doc.playback?.pattern ?? "block"}
+          onSelectSlot={(slot) => setEditTarget({ ...editTarget, slot })}
+          onSlotCount={(count) => editDoc((d) => mapMeasure(d, editTarget.pos, (m) => withSlotCount(m, count)))}
+          onToggleRest={() =>
+            editDoc((d) =>
+              mapMeasure(d, editTarget.pos, (m) => ({
+                ...m,
+                slots: m.slots.map((s, i) =>
+                  i !== editTarget.slot
+                    ? s
+                    : s
+                      ? null
+                      : (m.slots.find((x) => x) ?? { idx: keyIdx, quality: "maj" as const })
+                ),
+              }))
+            )
+          }
+          onSetExt={(ext) => {
+            const chord = editMeasure.slots[editTarget.slot];
+            if (!chord) return;
+            const next: Chord = { ...chord, ext: ext || undefined };
+            playChordAt(chordSemis(next), 0, 1.2, instrument);
+            editDoc((d) =>
+              mapMeasure(d, editTarget.pos, (m) => ({
+                ...m,
+                slots: m.slots.map((s, i) => (i === editTarget.slot ? next : s)),
+              }))
+            );
+          }}
+          onSetSig={(sig) => editDoc((d) => mapMeasure(d, editTarget.pos, (m) => ({ ...m, sig: sig || undefined })))}
+          onSetPat={(pat) => editDoc((d) => mapMeasure(d, editTarget.pos, (m) => ({ ...m, pat: pat || undefined })))}
+          onRemoveMeasure={() => {
+            editDoc((d) => mapMeasure(d, editTarget.pos, () => null));
+            clearTransient();
+          }}
+          onNewPattern={() => setPatternOpen("measure")}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
+
+      {partSheet !== null && doc.arrangement[partSheet] && (
+        <PartSheet
+          doc={doc}
+          ai={partSheet}
+          onRename={(name) => editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, name })), "rename")}
+          onRepeat={(delta) =>
+            editDoc((d) => ({
+              ...d,
+              arrangement: d.arrangement.map((pl, i) =>
+                i === partSheet ? { ...pl, repeat: clampRepeat(clampRepeat(pl.repeat) + delta) } : pl
+              ),
+            }))
+          }
+          onMove={(dir) => {
+            const to = partSheet + dir;
+            if (to < 0 || to >= doc.arrangement.length) return;
+            editDoc((d) => {
+              const arr = [...d.arrangement];
+              [arr[partSheet], arr[to]] = [arr[to], arr[partSheet]];
+              return { ...d, arrangement: arr };
+            });
+            setPartSheet(to);
+            clearTransient();
+          }}
+          onAddLine={() =>
+            editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, lines: [...p.lines, { measures: [] }] })))
+          }
+          onAddPlacement={() => {
+            editDoc((d) => {
+              const arr = [...d.arrangement];
+              arr.splice(partSheet + 1, 0, { part: d.arrangement[partSheet].part });
+              return { ...d, arrangement: arr };
+            });
+            clearTransient();
+          }}
+          onDuplicateAsNew={() => {
+            editDoc((d) => {
+              const at = partAt(d, partSheet);
+              if (!at) return d;
+              const id = newPartId(d);
+              const copy = structuredClone(at.part);
+              copy.name = `${at.part.name} 2`;
+              const arr = [...d.arrangement];
+              arr.splice(partSheet + 1, 0, { part: id, repeat: d.arrangement[partSheet].repeat });
+              return { ...d, parts: { ...d.parts, [id]: copy }, arrangement: arr };
+            });
+            clearTransient();
+          }}
+          onDeletePlacement={() => {
+            editDoc((d) => {
+              if (d.arrangement.length <= 1) return d;
+              const partId = d.arrangement[partSheet].part;
+              const arrangement = d.arrangement.filter((_, i) => i !== partSheet);
+              const stillUsed = arrangement.some((pl) => pl.part === partId);
+              const parts = stillUsed ? d.parts : Object.fromEntries(Object.entries(d.parts).filter(([id]) => id !== partId));
+              return { ...d, arrangement, parts };
+            });
+            setPartSheet(null);
+            setActive({ ai: 0, li: 0 });
+            clearTransient();
+          }}
+          onClose={() => setPartSheet(null)}
+        />
+      )}
+
+      {lineSheet && (
+        <LineSheet
+          doc={doc}
+          ai={lineSheet.ai}
+          li={lineSheet.li}
+          onRepeat={(delta) =>
+            editDoc((d) =>
+              mapLine(d, lineSheet.ai, lineSheet.li, (l) => ({
+                ...l,
+                repeat: clampRepeat(clampRepeat(l.repeat) + delta),
+              }))
+            )
+          }
+          onMove={(dir) => {
+            const at = partAt(doc, lineSheet.ai);
+            const to = lineSheet.li + dir;
+            if (!at || to < 0 || to >= at.part.lines.length) return;
+            editDoc((d) =>
+              mapPart(d, lineSheet.ai, (p) => {
+                const lines = [...p.lines];
+                [lines[lineSheet.li], lines[to]] = [lines[to], lines[lineSheet.li]];
+                return { ...p, lines };
+              })
+            );
+            setLineSheet({ ...lineSheet, li: to });
+            clearTransient();
+          }}
+          onDuplicate={() => {
+            editDoc((d) =>
+              mapPart(d, lineSheet.ai, (p) => {
+                const lines = [...p.lines];
+                lines.splice(lineSheet.li + 1, 0, structuredClone(p.lines[lineSheet.li]));
+                return { ...p, lines };
+              })
+            );
+            clearTransient();
+          }}
+          onDelete={() => {
+            editDoc((d) => mapLine(d, lineSheet.ai, lineSheet.li, () => null));
+            setLineSheet(null);
+            clearTransient();
+          }}
+          onClose={() => setLineSheet(null)}
+        />
+      )}
+
+      {addOpen && (
+        <AddPartSheet
+          doc={doc}
+          onNewPart={() => {
+            editDoc((d) => {
+              const id = newPartId(d);
+              const used = new Set(Object.values(d.parts).map((p) => p.name));
+              const name = ["Verse", "Chorus", "Intro", "Pre-Chorus", "Bridge", "Outro"].find((n) => !used.has(n)) ?? `Part ${Object.keys(d.parts).length + 1}`;
+              return {
+                ...d,
+                parts: { ...d.parts, [id]: { name, lines: [{ measures: [] }] } },
+                arrangement: [...d.arrangement, { part: id }],
+              };
+            });
+            setAddOpen(false);
+            setActive({ ai: doc.arrangement.length, li: 0 });
+          }}
+          onReuse={(partId) => {
+            editDoc((d) => ({ ...d, arrangement: [...d.arrangement, { part: partId }] }));
+            setAddOpen(false);
+            setActive({ ai: doc.arrangement.length, li: 0 });
+          }}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
+
+      {soundOpen && (
+        <SoundSheet
+          doc={doc}
+          instrument={instrument}
+          onInstrument={(i) => {
+            setInstrument(i);
+            ensureLoaded(ensureCtx(), i);
+          }}
+          onPattern={(id) => editDoc((d) => ({ ...d, playback: { ...(d.playback ?? {}), pattern: id } }))}
+          onBass={(on) => {
+            if (on) {
+              preload("bass");
+              ensureLoaded(ensureCtx(), "bass");
+            }
+            editDoc((d) => ({ ...d, playback: { ...(d.playback ?? {}), bass: on } }));
+          }}
+          onBassPattern={(id) => editDoc((d) => ({ ...d, playback: { ...(d.playback ?? {}), bassPattern: id } }))}
+          onDrums={(id) => editDoc((d) => ({ ...d, playback: { ...(d.playback ?? {}), drums: id } }))}
+          onNewPattern={() => setPatternOpen("song")}
+          onClose={() => setSoundOpen(false)}
+        />
+      )}
+
+      {patternOpen && <PatternEditorSheet onSave={savePattern} onClose={() => setPatternOpen(null)} />}
+
       {sigOpen && (
-        <>
-          <div className="sheet-backdrop" onClick={() => setSigOpen(false)} />
-          <div className="sheet" role="dialog" aria-label="Time signature">
-            <div className="sheet-head">
-              <span className="sheet-chord">Time signature</span>
-              <span className="sheet-roman">whole song</span>
-            </div>
-            <div className="ext-pills">
-              {TIME_SIGNATURES.map((sig) => (
-                <button
-                  key={sig}
-                  className={`ext-pill ${song.timeSignature === sig ? "ext-active" : ""}`}
-                  onClick={() => edit((s) => ({ ...s, timeSignature: sig }))}
-                >
-                  {sig}
-                </button>
-              ))}
-            </div>
-            <p className="share-note">
-              BPM stays the quarter-note pulse. Single measures can override
-              this from the chord's edit sheet.
-            </p>
-            <div className="sheet-actions">
-              <span />
-              <button className="sheet-done" onClick={() => setSigOpen(false)}>Done</button>
-            </div>
+        <Sheet title="Time signature" sub="whole song" label="Time signature" onClose={() => setSigOpen(false)}>
+          <div className="ext-pills">
+            {TIME_SIGNATURES.map((sig) => (
+              <button
+                key={sig}
+                className={`ext-pill ${song.timeSignature === sig ? "ext-active" : ""}`}
+                onClick={() => edit((s) => ({ ...s, timeSignature: sig }))}
+              >
+                {sig}
+              </button>
+            ))}
           </div>
-        </>
+          <p className="share-note">
+            BPM stays the quarter-note pulse. Single measures can override this from the measure's edit sheet.
+          </p>
+          <div className="sheet-actions">
+            <span />
+            <button className="sheet-done" onClick={() => setSigOpen(false)}>Done</button>
+          </div>
+        </Sheet>
       )}
 
       {shareOpen && (
-        <>
-          <div className="sheet-backdrop" onClick={() => setShareOpen(false)} />
-          <div className="sheet" role="dialog" aria-label="Share song">
-            <div className="sheet-head">
-              <span className="sheet-chord">Share</span>
-              <span className="sheet-roman">{song.title || "Untitled"}</span>
-            </div>
-            {!song.shareId && (
-              <>
-                <p className="share-note">
-                  Create a public link — anyone with it can view and play this
-                  song (and adjust the tempo), without an account. They can't
-                  edit it.
-                </p>
-                <div className="sheet-actions">
-                  <span />
-                  <button className="sheet-done" disabled={shareBusy} onClick={() => setSharing(true)}>
-                    {shareBusy ? "Creating…" : "Create link"}
-                  </button>
-                </div>
-              </>
-            )}
-            {song.shareId && (
-              <>
-                <p className="share-note">Anyone with this link can view and play the song:</p>
-                <div className="share-url-row">
-                  <span className="share-url">{shareUrl}</span>
-                  <button className="part-btn" onClick={copyShareUrl}>
-                    {copied ? "Copied ✓" : "Copy"}
-                  </button>
-                </div>
-                <div className="sheet-actions">
-                  <button className="remove-chord" disabled={shareBusy} onClick={() => setSharing(false)}>
-                    {shareBusy ? "…" : "Stop sharing"}
-                  </button>
-                  <button className="sheet-done" onClick={() => setShareOpen(false)}>Done</button>
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
-
-      {sectionTarget !== null && sections[sectionTarget] && (
-        <>
-          <div className="sheet-backdrop" onClick={() => setSectionTarget(null)} />
-          <div className="sheet" role="dialog" aria-label="Edit song part">
-            <div className="sheet-head">
-              <span className="sheet-chord">{sections[sectionTarget].name}</span>
-              <span className="sheet-roman">{sections[sectionTarget].chords.length} chords</span>
-            </div>
-            <input
-              className="rename-input"
-              value={sections[sectionTarget].name}
-              onChange={(e) => renameSection(sectionTarget, e.target.value)}
-              aria-label="Part name"
-            />
-            <div className="ext-pills">
-              {SECTION_NAMES.map((n) => (
-                <button key={n} className="ext-pill" onClick={() => renameSection(sectionTarget, n)}>
-                  {n}
-                </button>
-              ))}
-            </div>
-            <div className="repeat-row">
-              <span className="repeat-label">Repeats</span>
-              <div className="repeat-stepper">
-                <button
-                  className="bpm-btn"
-                  disabled={sectionRepeat(sections[sectionTarget]) <= 1}
-                  onClick={() => setRepeat(sectionTarget, -1)}
-                  aria-label="Fewer repeats"
-                >
-                  −
-                </button>
-                <span className="repeat-value">{sectionRepeat(sections[sectionTarget])}×</span>
-                <button
-                  className="bpm-btn"
-                  disabled={sectionRepeat(sections[sectionTarget]) >= 16}
-                  onClick={() => setRepeat(sectionTarget, 1)}
-                  aria-label="More repeats"
-                >
-                  +
+        <Sheet title="Share" sub={song.title || "Untitled"} label="Share song" onClose={() => setShareOpen(false)}>
+          {!song.shareId && (
+            <>
+              <p className="share-note">
+                Create a public link — anyone with it can open this song in the
+                editor and play with a copy, without an account. Your original
+                stays yours.
+              </p>
+              <div className="sheet-actions">
+                <span />
+                <button className="sheet-done" disabled={shareBusy} onClick={() => setSharing(true)}>
+                  {shareBusy ? "Creating…" : "Create link"}
                 </button>
               </div>
-            </div>
-            <div className="part-actions">
-              <button
-                className="part-btn"
-                disabled={sectionTarget === 0}
-                onClick={() => moveSection(sectionTarget, -1)}
-              >
-                ↑ Move up
-              </button>
-              <button
-                className="part-btn"
-                disabled={sectionTarget === sections.length - 1}
-                onClick={() => moveSection(sectionTarget, 1)}
-              >
-                ↓ Move down
-              </button>
-              <button className="part-btn" onClick={() => duplicateSection(sectionTarget)}>
-                ⧉ Duplicate
-              </button>
-            </div>
-            <div className="sheet-actions">
-              <button
-                className="remove-chord"
-                disabled={sections.length <= 1}
-                onClick={() => removeSection(sectionTarget)}
-              >
-                Delete part
-              </button>
-              <button className="sheet-done" onClick={() => setSectionTarget(null)}>Done</button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {editTarget && editChord && (
-        <>
-          <div className="sheet-backdrop" onClick={() => setEditTarget(null)} />
-          <div className="sheet" role="dialog" aria-label="Edit chord">
-            <div className="sheet-head">
-              <span className="sheet-chord">{chordLabel(editChord)}</span>
-              <span className="sheet-roman">{chordRoman(editChord, keyIdx)} in {FIFTHS[keyIdx].maj}</span>
-            </div>
-            <div className="ext-pills">
-              {EXTENSIONS.map((ext) => (
-                <button
-                  key={ext || "triad"}
-                  className={`ext-pill ${(editChord.ext ?? "") === ext ? "ext-active" : ""}`}
-                  onClick={() => setChordExt(editTarget, ext)}
-                >
-                  {extLabel(ext)}
+            </>
+          )}
+          {song.shareId && (
+            <>
+              <p className="share-note">Anyone with this link can view and play the song:</p>
+              <div className="share-url-row">
+                <span className="share-url">{shareUrl}</span>
+                <button className="part-btn" onClick={copyShareUrl}>{copied ? "Copied ✓" : "Copy"}</button>
+              </div>
+              <div className="sheet-actions">
+                <button className="remove-chord" disabled={shareBusy} onClick={() => setSharing(false)}>
+                  {shareBusy ? "…" : "Stop sharing"}
                 </button>
-              ))}
-            </div>
-            <p className="sheet-label">Measure time signature</p>
-            <div className="ext-pills">
-              <button
-                className={`ext-pill ${!editChord.sig ? "ext-active" : ""}`}
-                onClick={() => setChordSig(editTarget, undefined)}
-              >
-                song ({song.timeSignature})
-              </button>
-              {TIME_SIGNATURES.map((sig) => (
-                <button
-                  key={sig}
-                  className={`ext-pill ${editChord.sig === sig ? "ext-active" : ""}`}
-                  onClick={() => setChordSig(editTarget, sig)}
-                >
-                  {sig}
-                </button>
-              ))}
-            </div>
-            <div className="sheet-actions">
-              <button className="remove-chord" onClick={() => removeChord(editTarget)}>Remove chord</button>
-              <button className="sheet-done" onClick={() => setEditTarget(null)}>Done</button>
-            </div>
-          </div>
-        </>
+                <button className="sheet-done" onClick={() => setShareOpen(false)}>Done</button>
+              </div>
+            </>
+          )}
+        </Sheet>
       )}
     </div>
   );

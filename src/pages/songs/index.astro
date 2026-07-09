@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import { members } from "@wix/members";
 import { items } from "@wix/data";
+import { countMeasures, countSections, migrateSong } from "../../lib/songModel";
 
 let me: any = null;
 try {
@@ -24,11 +25,12 @@ try {
 const who = me.profile?.nickname || me.loginEmail || "there";
 
 function sectionCount(s: any): string {
-  const n = s.sections?.list?.length ?? 0;
-  return n === 1 ? "1 section" : `${n} sections`;
+  const doc = migrateSong(s.sections);
+  const n = countSections(doc);
+  return n === 1 ? "1 part" : `${n} parts`;
 }
-function chordCount(s: any): number {
-  return (s.sections?.list ?? []).reduce((sum: number, sec: any) => sum + (sec.chords?.length ?? 0), 0);
+function measureCount(s: any): number {
+  return countMeasures(migrateSong(s.sections));
 }
 ---
 
@@ -67,7 +69,7 @@ function chordCount(s: any): number {
                 <span class="s-title">{s.title || "Untitled"}</span>
                 <br />
                 <span class="s-sub">
-                  {sectionCount(s)} · {chordCount(s)} chords · {s.bpm} BPM
+                  {sectionCount(s)} · {measureCount(s)} measures · {s.bpm} BPM
                 </span>
               </span>
               <span class="s-key">{s.songKey} major</span>

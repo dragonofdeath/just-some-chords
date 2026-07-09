@@ -3,6 +3,7 @@
 // Every 3 semitones — playback-rate shifting to the nearest sample stays ≤ ~2 st.
 
 export type Instrument = "piano" | "guitar" | "synth";
+export type SampleBank = "piano" | "guitar" | "bass";
 
 export const INSTRUMENTS: Instrument[] = ["piano", "guitar", "synth"];
 
@@ -19,9 +20,10 @@ function noteToMidi(name: string): number {
   return (octave + 1) * 12 + NOTE_VALUES[letter] + sharp;
 }
 
-const SAMPLE_MAPS: Record<Exclude<Instrument, "synth">, string[]> = {
+const SAMPLE_MAPS: Record<SampleBank, string[]> = {
   piano: ["C3", "Ds3", "Fs3", "A3", "C4", "Ds4", "Fs4", "A4", "C5", "Ds5", "Fs5", "A5", "C6"],
   guitar: ["D2", "F2", "Gs2", "B2", "D3", "F3", "Gs3", "B3", "D4", "F4", "Gs4", "B4", "Cs5"],
+  bass: ["E1", "G1", "As1", "Cs2", "E2", "G2", "As2", "Cs3"],
 };
 
 interface Bank {
@@ -31,9 +33,9 @@ interface Bank {
   decoding: Promise<void> | null;
 }
 
-const banks: Partial<Record<Exclude<Instrument, "synth">, Bank>> = {};
+const banks: Partial<Record<SampleBank, Bank>> = {};
 
-function bankFor(inst: Exclude<Instrument, "synth">): Bank {
+function bankFor(inst: SampleBank): Bank {
   let b = banks[inst];
   if (!b) {
     b = { fetches: new Map(), buffers: new Map(), ready: false, decoding: null };
@@ -43,7 +45,7 @@ function bankFor(inst: Exclude<Instrument, "synth">): Bank {
 }
 
 /** Start downloading sample bytes (no AudioContext needed). Safe to call repeatedly. */
-export function preload(inst: Instrument): void {
+export function preload(inst: Instrument | SampleBank): void {
   if (inst === "synth") return;
   const b = bankFor(inst);
   for (const name of SAMPLE_MAPS[inst]) {
@@ -61,7 +63,7 @@ export function preload(inst: Instrument): void {
 }
 
 /** Decode all samples for the instrument. Resolves when playable; rejects never (falls back). */
-export function ensureLoaded(ctx: AudioContext, inst: Instrument): Promise<void> {
+export function ensureLoaded(ctx: AudioContext, inst: Instrument | SampleBank): Promise<void> {
   if (inst === "synth") return Promise.resolve();
   const b = bankFor(inst);
   if (b.ready) return Promise.resolve();
@@ -85,14 +87,14 @@ export function ensureLoaded(ctx: AudioContext, inst: Instrument): Promise<void>
   return b.decoding;
 }
 
-export function isReady(inst: Instrument): boolean {
-  return inst === "synth" || !!banks[inst as Exclude<Instrument, "synth">]?.ready;
+export function isReady(inst: Instrument | SampleBank): boolean {
+  return inst === "synth" || !!banks[inst as SampleBank]?.ready;
 }
 
 /** Play one note (midi) at ctx-relative offset t. */
 export function playSampleNote(
   ctx: AudioContext,
-  inst: Exclude<Instrument, "synth">,
+  inst: SampleBank,
   midi: number,
   t: number,
   dur: number,

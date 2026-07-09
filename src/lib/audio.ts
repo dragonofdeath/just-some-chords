@@ -1,4 +1,4 @@
-import { ensureLoaded, isReady, playSampleNote, type Instrument } from "./sampler";
+import { ensureLoaded, isReady, playSampleNote, type Instrument, type SampleBank } from "./sampler";
 
 let audioCtx: AudioContext | null = null;
 
@@ -51,6 +51,36 @@ export function playChordAt(semis: number[], t: number, dur: number, inst: Instr
     const gain = i === 0 ? 0.5 : 0.34;
     playSampleNote(ctx, inst, midi, t + i * strum, dur * ring, gain, dest);
   });
+}
+
+// One melodic note (arpeggio tone / bass note) — sampled when the bank is
+// decoded, otherwise a soft synth tone so playback never goes silent.
+export function playMidiAt(
+  midi: number,
+  t: number,
+  dur: number,
+  bank: SampleBank | "synth",
+  gain: number,
+  dest?: AudioNode
+) {
+  const ctx = ensureCtx();
+  if (bank !== "synth" && isReady(bank)) {
+    playSampleNote(ctx, bank, midi, t, dur, gain, dest);
+    return;
+  }
+  if (bank !== "synth") ensureLoaded(ctx, bank);
+  const now = ctx.currentTime + t;
+  const o = ctx.createOscillator();
+  o.type = bank === "bass" ? "sine" : "triangle";
+  o.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(gain * 0.4, now + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+  o.connect(g);
+  g.connect(dest ?? ctx.destination);
+  o.start(now);
+  o.stop(now + dur + 0.05);
 }
 
 export function clickAt(t: number, accent: boolean, dest?: AudioNode) {

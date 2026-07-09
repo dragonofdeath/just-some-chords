@@ -36,7 +36,8 @@ const initialSong = song
       songKey: song.songKey ?? "G",
       bpm: song.bpm ?? 84,
       timeSignature: song.timeSignature ?? "4/4",
-      sections: song.sections?.list ? song.sections : { list: [{ name: "Verse", chords: [] }] },
+      // raw v1 or v2 — the editor migrates on load
+      sections: song.sections ?? null,
     }
   : null;
 ---

@@ -13,6 +13,6 @@ For documentation and support, check out:
 - [Community on Discord](https://discord.gg/n6TBrSnYTp)
 ## Audio samples
 
-Piano and acoustic-guitar samples in `public/samples/` are from
+Piano, acoustic-guitar, and electric-bass samples in `public/samples/` are from
 [tonejs-instruments](https://github.com/nbrosowsky/tonejs-instruments)
-by N. Brosowsky, licensed CC-BY 3.0.
+by N. Brosowsky, licensed CC-BY 3.0. Drum sounds are synthesized.
