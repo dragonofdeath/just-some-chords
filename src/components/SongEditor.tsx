@@ -3,6 +3,7 @@ import { ensureLoaded, preload, type Instrument } from "../lib/sampler";
 import { clickAt, ensureCtx, killBus, playChordAt, playMidiAt } from "../lib/audio";
 import { playDrum } from "../lib/drums";
 import { buildTimeline } from "../lib/timeline";
+import { chordPatternEvents } from "../lib/patterns";
 import {
   clampRepeat,
   emptyDoc,
@@ -16,6 +17,7 @@ import {
   newPartId,
   newPatternId,
   partAt,
+  removeCustomPattern,
   withSlotCount,
   type Mix,
   type Pos,
@@ -26,18 +28,21 @@ import {
   FIFTHS,
   TIME_SIGNATURES,
   bassMidi,
+  beatSeconds,
   chordLabel,
   chordSemis,
   chordToneSemis,
   extLabel,
   isInKey,
   keyIdxFromName,
+  parseSig,
   type Chord,
 } from "../lib/theory";
 import PartView, { type Sel } from "./PartView";
 import MeasureSettingsSheet from "./sheets/MeasureSettingsSheet";
 import SoundSheet from "./sheets/SoundSheet";
-import PatternEditorSheet from "./sheets/PatternEditorSheet";
+import PatternEditorSheet, { type PatternDraft } from "./sheets/PatternEditorSheet";
+import PatternsSheet from "./sheets/PatternsSheet";
 import { AddPartSheet, LineSheet, PartSheet } from "./sheets/PartSheet";
 import Sheet from "./sheets/Sheet";
 
@@ -133,7 +138,8 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const [lineSheet, setLineSheet] = useState<{ ai: number; li: number } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [soundOpen, setSoundOpen] = useState(false);
-  const [patternOpen, setPatternOpen] = useState<null | "song" | "measure">(null);
+  const [patternEditor, setPatternEditor] = useState<null | { target: "song" | "measure" | "none"; id?: string }>(null);
+  const [patternsOpen, setPatternsOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
@@ -146,6 +152,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const playPosRef = useRef<Pos | null>(null);
   const playingRef = useRef(false);
   const holdTimer = useRef<{ t?: ReturnType<typeof setTimeout>; i?: ReturnType<typeof setInterval> }>({});
+  const previewBus = useRef<GainNode | null>(null);
   const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
   const past = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
   const future = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
@@ -545,17 +552,43 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   };
 
   // ---------- pattern save ----------
-  const savePattern = (name: string, steps: string) => {
-    const measurePos = patternOpen === "measure" ? selPos : null;
+  const savePattern = (draft: PatternDraft) => {
+    const target = patternEditor?.target;
+    const editId = patternEditor?.id;
+    const measurePos = target === "measure" ? selPos : null;
     editDoc((d) => {
-      const id = newPatternId(d);
-      const withPat: SongDocV2 = { ...d, patterns: { ...(d.patterns ?? {}), [id]: { name, steps } } };
-      if (measurePos) {
-        return mapMeasure(withPat, measurePos, (m) => ({ ...m, pat: id }));
-      }
-      return { ...withPat, playback: { ...(withPat.playback ?? {}), pattern: id } };
+      const id = editId ?? newPatternId(d);
+      let out: SongDocV2 = {
+        ...d,
+        patterns: { ...(d.patterns ?? {}), [id]: { name: draft.name, steps: draft.steps, res: draft.res } },
+      };
+      if (measurePos) out = mapMeasure(out, measurePos, (m) => ({ ...m, pat: id }));
+      else if (target === "song") out = { ...out, playback: { ...(out.playback ?? {}), pattern: id } };
+      return out;
     });
-    setPatternOpen(null);
+    setPatternEditor(null);
+  };
+
+  // Audition a pattern draft over the key's I chord at the song tempo.
+  const previewPattern = (draft: PatternDraft) => {
+    const ctx = ensureCtx();
+    killBus(previewBus.current);
+    const bus = ctx.createGain();
+    bus.gain.value = 1;
+    bus.connect(ctx.destination);
+    previewBus.current = bus;
+    const { n, d } = parseSig(song.timeSignature);
+    const beat = beatSeconds(song.timeSignature, song.bpm);
+    const chord: Chord = { idx: keyIdx, quality: "maj" };
+    for (const ev of chordPatternEvents("__custom__", n, d, { name: draft.name, steps: draft.steps, res: draft.res })) {
+      const rel = 0.05 + ev.t * beat;
+      if (ev.kind === "block") {
+        playChordAt(chordSemis(chord), rel, ev.dur * beat * 0.95, instrument, bus);
+      } else {
+        const midi = 60 + chordToneSemis(chord)[ev.tone ?? 0] + (instrument === "guitar" ? -12 : 0);
+        playMidiAt(midi, rel, ev.dur * beat * 0.95, instrument, ev.accent ? 0.5 : 0.36, bus);
+      }
+    }
   };
 
   // ---------- wheel ----------
@@ -841,7 +874,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
             setMeasureSettingsOpen(false);
             clearTransient();
           }}
-          onNewPattern={() => setPatternOpen("measure")}
+          onNewPattern={() => setPatternEditor({ target: "measure" })}
           onClose={() => setMeasureSettingsOpen(false)}
         />
       )}
@@ -1010,12 +1043,45 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
               `mix-${track}`
             )
           }
-          onNewPattern={() => setPatternOpen("song")}
+          onNewPattern={() => setPatternEditor({ target: "song" })}
+          onManage={() => setPatternsOpen(true)}
           onClose={() => setSoundOpen(false)}
         />
       )}
 
-      {patternOpen && <PatternEditorSheet onSave={savePattern} onClose={() => setPatternOpen(null)} />}
+      {patternEditor && (
+        <PatternEditorSheet
+          initial={
+            patternEditor.id && doc.patterns?.[patternEditor.id]
+              ? {
+                  name: doc.patterns[patternEditor.id].name,
+                  steps: doc.patterns[patternEditor.id].steps,
+                  res: doc.patterns[patternEditor.id].res === 16 ? 16 : 8,
+                }
+              : undefined
+          }
+          onSave={savePattern}
+          onPreview={previewPattern}
+          onClose={() => setPatternEditor(null)}
+        />
+      )}
+
+      {patternsOpen && (
+        <PatternsSheet
+          doc={doc}
+          onEdit={(id) => setPatternEditor({ target: "none", id })}
+          onClone={(id) =>
+            editDoc((d) => {
+              const src = d.patterns?.[id];
+              if (!src) return d;
+              return { ...d, patterns: { ...(d.patterns ?? {}), [newPatternId(d)]: { ...src, name: `${src.name} 2` } } };
+            })
+          }
+          onDelete={(id) => editDoc((d) => removeCustomPattern(d, id))}
+          onNew={() => setPatternEditor({ target: "none" })}
+          onClose={() => setPatternsOpen(false)}
+        />
+      )}
 
       {sigOpen && (
         <Sheet title="Time signature" sub="whole song" label="Time signature" onClose={() => setSigOpen(false)}>

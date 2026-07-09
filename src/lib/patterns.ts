@@ -92,22 +92,32 @@ function skankPattern(n: number, d: number): PatternEvent[] {
   return out;
 }
 
-function compileCustom(steps: string, n: number, d: number): PatternEvent[] {
-  const cell = eighthOf(d);
+function compileCustom(steps: string, n: number, d: number, res = 8): PatternEvent[] {
+  const cell = eighthOf(d) * (8 / (res === 16 ? 16 : 8));
   const cells = Math.max(1, Math.round(n / cell));
   const out: PatternEvent[] = [];
   let arpTone = 0;
-  for (let i = 0; i < cells; i++) {
+  let i = 0;
+  while (i < cells) {
     const ch = steps[i % steps.length];
-    const t = i * cell;
-    if (ch === "X" || ch === "x") {
-      out.push({ t, dur: cell, kind: "block", accent: ch === "X" });
-    } else if (ch === "a") {
-      out.push({ t, dur: cell * 1.6, kind: "arp", tone: arpTone % 4 });
-      arpTone++;
-    } else if (ch === "r") {
-      out.push({ t, dur: cell * 1.6, kind: "arp", tone: 0 });
-      arpTone = 1;
+    if (ch === "X" || ch === "x" || ch === "a" || ch === "r") {
+      // trailing "-" cells sustain the hit (half/whole notes)
+      let span = 1;
+      while (i + span < cells && steps[(i + span) % steps.length] === "-") span++;
+      const t = i * cell;
+      const dur = span * cell;
+      if (ch === "X" || ch === "x") {
+        out.push({ t, dur, kind: "block", accent: ch === "X" });
+      } else if (ch === "a") {
+        out.push({ t, dur, kind: "arp", tone: arpTone % 4 });
+        arpTone++;
+      } else {
+        out.push({ t, dur, kind: "arp", tone: 0 });
+        arpTone = 1;
+      }
+      i += span;
+    } else {
+      i++;
     }
   }
   return out;
@@ -135,7 +145,7 @@ export function chordPatternEvents(id: string, n: number, d: number, custom?: Cu
     case "skank":
       return skankPattern(n, d);
     default:
-      if (custom) return compileCustom(custom.steps, n, d);
+      if (custom) return compileCustom(custom.steps, n, d, custom.res);
       return blockPattern(n);
   }
 }

@@ -26,7 +26,10 @@ export interface Part {
 
 export interface CustomPattern {
   name: string;
-  steps: string; // one char per eighth: "." off, "X" accent block, "x" block, "a" arp, "r" root
+  // One char per grid cell: "." off, "X" accent block, "x" block, "a" arp,
+  // "r" root, "-" hold (sustains the previous hit — whole/half notes).
+  steps: string;
+  res?: number; // grid resolution: 8 (eighths, default) or 16 (sixteenths)
 }
 
 export interface Mix {
@@ -145,8 +148,8 @@ export function migrateSong(raw: any): SongDocV2 {
     if (raw.patterns && typeof raw.patterns === "object") {
       const pats: Record<string, CustomPattern> = {};
       for (const [id, p] of Object.entries<any>(raw.patterns)) {
-        if (p && typeof p.name === "string" && typeof p.steps === "string" && /^[.Xxar]{1,32}$/.test(p.steps)) {
-          pats[id] = { name: p.name, steps: p.steps };
+        if (p && typeof p.name === "string" && typeof p.steps === "string" && /^[.Xxar-]{1,32}$/.test(p.steps)) {
+          pats[id] = { name: p.name, steps: p.steps, res: p.res === 16 ? 16 : 8 };
         }
       }
       if (Object.keys(pats).length) doc.patterns = pats;
@@ -236,6 +239,25 @@ export function withSlotCount(m: Measure, count: number): Measure {
   const fill = [...m.slots].reverse().find((s) => s !== null) ?? null;
   while (slots.length < k) slots.push(fill ? { ...fill } : null);
   return { ...m, slots };
+}
+
+/** Delete a custom pattern and clear every reference to it. */
+export function removeCustomPattern(doc: SongDocV2, id: string): SongDocV2 {
+  const patterns = Object.fromEntries(Object.entries(doc.patterns ?? {}).filter(([k]) => k !== id));
+  const parts = Object.fromEntries(
+    Object.entries(doc.parts).map(([pid, p]) => [
+      pid,
+      {
+        ...p,
+        lines: p.lines.map((l) => ({
+          ...l,
+          measures: l.measures.map((m) => (m.pat === id ? { ...m, pat: undefined } : m)),
+        })),
+      },
+    ])
+  );
+  const playback = doc.playback?.pattern === id ? { ...doc.playback, pattern: undefined } : doc.playback;
+  return { ...doc, patterns: Object.keys(patterns).length ? patterns : undefined, parts, playback };
 }
 
 // ---------- counters (list page, sheets) ----------

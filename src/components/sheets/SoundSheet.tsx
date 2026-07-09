@@ -20,6 +20,7 @@ interface Props {
   onDrums: (id: string) => void;
   onMix: (track: keyof Mix, value: number) => void;
   onNewPattern: () => void;
+  onManage: () => void;
   onClose: () => void;
 }
 
@@ -33,6 +34,7 @@ export default function SoundSheet({
   onDrums,
   onMix,
   onNewPattern,
+  onManage,
   onClose,
 }: Props) {
   const pb = doc.playback ?? {};
@@ -93,6 +95,9 @@ export default function SoundSheet({
           </button>
         ))}
         <button className="ext-pill" onClick={onNewPattern}>＋ New…</button>
+        {customs.length > 0 && (
+          <button className="ext-pill" onClick={onManage}>⚙ Manage</button>
+        )}
       </div>
 
       <p className="sheet-label">Bass</p>

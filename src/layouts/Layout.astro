@@ -846,6 +846,51 @@ const { title = "Just Some Chords" } = Astro.props;
     font-size: 12px;
     font-weight: 700;
   }
+  .pat-hold {
+    background: var(--rule-soft);
+    border-style: dashed;
+  }
+  .pat-preview {
+    margin-left: auto;
+  }
+  .pat-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 0;
+    border-bottom: 1px dashed var(--rule);
+  }
+  .pat-row-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .pat-row-name {
+    font-family: var(--serif);
+    font-size: 15.5px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pat-row-steps {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    letter-spacing: 0.08em;
+  }
+  .pat-del {
+    border: 1px solid var(--rule);
+    background: transparent;
+    border-radius: 999px;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
   .slot-tabs {
     margin-bottom: 4px;
   }
