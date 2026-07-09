@@ -26,6 +26,27 @@ export interface Chord {
   idx: number; // position on the circle of fifths (0..11)
   quality: ChordQuality;
   ext?: string; // one of EXTENSIONS; "" / undefined = plain triad
+  sig?: string; // per-measure time signature override; undefined = song's
+}
+
+export const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/8", "7/8", "9/8", "12/8"] as const;
+
+export function parseSig(sig: string | undefined): { n: number; d: number } {
+  const m = /^(\d{1,2})\/(2|4|8|16)$/.exec(sig ?? "");
+  if (!m) return { n: 4, d: 4 };
+  const n = parseInt(m[1], 10);
+  return n >= 1 && n <= 16 ? { n, d: parseInt(m[2], 10) } : { n: 4, d: 4 };
+}
+
+// BPM is always the quarter-note tempo; the denominator note scales off it.
+export function beatSeconds(sig: string | undefined, bpm: number): number {
+  const { d } = parseSig(sig);
+  return (60 / bpm) * (4 / d);
+}
+
+export function barSeconds(sig: string | undefined, bpm: number): number {
+  const { n } = parseSig(sig);
+  return n * beatSeconds(sig, bpm);
 }
 
 // Chord modifications. "" = plain triad.

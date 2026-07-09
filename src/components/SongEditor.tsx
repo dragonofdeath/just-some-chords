@@ -5,6 +5,9 @@ import {
   EXTENSIONS,
   FIFTHS,
   SECTION_NAMES,
+  TIME_SIGNATURES,
+  barSeconds,
+  beatSeconds,
   chordLabel,
   chordRoman,
   chordSemis,
@@ -12,6 +15,7 @@ import {
   extLabel,
   isInKey,
   keyIdxFromName,
+  parseSig,
   sectionRepeat,
   type Chord,
   type SongData,
@@ -90,6 +94,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const [editTarget, setEditTarget] = useState<PlayPos | null>(null);
   const [sectionTarget, setSectionTarget] = useState<number | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [sigOpen, setSigOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   // Selection: a single chord (a === b) or a range within one section.
@@ -166,6 +171,12 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     const chord: Chord = { ...sections[pos.si].chords[pos.ci], ext: ext || undefined };
     playChordAt(chordSemis(chord), 0, 1.2, instrument);
     updateChords(pos.si, (chords) => chords.map((c, i) => (i === pos.ci ? chord : c)));
+  };
+
+  const setChordSig = (pos: PlayPos, sig: string | undefined) => {
+    updateChords(pos.si, (chords) =>
+      chords.map((c, i) => (i === pos.ci ? { ...c, sig: sig || undefined } : c))
+    );
   };
 
   const removeChord = (pos: PlayPos) => {
@@ -272,13 +283,20 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     bus.gain.value = 1;
     bus.connect(ctx.destination);
     playBus.current = bus;
-    const beatDur = 60 / song.bpm;
-    const barDur = beatDur * 4;
+    // Each chord fills one measure; the measure's own signature (or the
+    // song's) sets its length. BPM is the quarter-note tempo throughout.
+    const sigOf = (c: Chord) => c.sig ?? song.timeSignature;
+    const barDurOf = (c: Chord) => barSeconds(sigOf(c), song.bpm);
     const scheduleBar = (chord: Chord, atAbs: number) => {
       const rel = atAbs - ctx.currentTime;
-      playChordAt(chordSemis(chord), rel, barDur * 0.95, instrument, bus);
+      const { n, d } = parseSig(sigOf(chord));
+      const beat = beatSeconds(sigOf(chord), song.bpm);
+      playChordAt(chordSemis(chord), rel, n * beat * 0.95, instrument, bus);
       if (metronome) {
-        for (let b = 0; b < 4; b++) clickAt(rel + b * beatDur, b === 0, bus);
+        const compound = d === 8 && n % 3 === 0;
+        for (let b = 0; b < n; b++) {
+          clickAt(rel + b * beat, compound ? b % 3 === 0 : b === 0, bus);
+        }
       }
     };
 
@@ -288,10 +306,16 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       const loop = sections[sel.si].chords.slice(sel.a, sel.b + 1);
       const len = loop.length;
       if (!len) return stop();
-      const passDur = len * barDur;
+      const durs = loop.map(barDurOf);
+      const passDur = durs.reduce((s, v) => s + v, 0);
       const t0 = ctx.currentTime + 0.06;
-      const schedulePass = (p: number) =>
-        loop.forEach((c, i) => scheduleBar(c, t0 + p * passDur + i * barDur));
+      const schedulePass = (p: number) => {
+        let at = t0 + p * passDur;
+        loop.forEach((c) => {
+          scheduleBar(c, at);
+          at += barDurOf(c);
+        });
+      };
       schedulePass(0);
       schedulePass(1);
       setPlaying(true);
@@ -301,7 +325,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         if (i === 0 && g > 0) schedulePass(g / len + 1);
         setPlayPos({ si: sel.si, ci: sel.a + i });
         g++;
-        playTimer.current = setTimeout(tick, barDur * 1000);
+        playTimer.current = setTimeout(tick, durs[i] * 1000);
       };
       tick();
       return;
@@ -323,7 +347,14 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     const playSteps = steps.slice(startIdx);
     if (!playSteps.length) return stop();
     const t0 = ctx.currentTime + 0.06;
-    playSteps.forEach((st, i) => scheduleBar(st.chord, t0 + i * barDur));
+    const durs: number[] = [];
+    let at = t0;
+    playSteps.forEach((st) => {
+      scheduleBar(st.chord, at);
+      const bd = barDurOf(st.chord);
+      durs.push(bd);
+      at += bd;
+    });
     setPlaying(true);
     let step = 0;
     const tick = () => {
@@ -331,8 +362,9 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       const st = playSteps[step];
       setPlayPos({ si: st.si, ci: st.ci });
       sectionRefs.current[st.si]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const bd = durs[step];
       step++;
-      playTimer.current = setTimeout(tick, barDur * 1000);
+      playTimer.current = setTimeout(tick, bd * 1000);
     };
     tick();
   };
@@ -580,7 +612,10 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
                     }}
                   >
                     <span className="c-name">{chordLabel(c)}</span>
-                    <span className="c-roman">{chordRoman(c, keyIdx)}</span>
+                    <span className="c-roman">
+                      {chordRoman(c, keyIdx)}
+                      {c.sig ? ` · ${c.sig}` : ""}
+                    </span>
                   </button>
                 );
               })}
@@ -639,11 +674,45 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
             <span>{song.bpm} BPM</span>
             <button className="bpm-btn" onClick={() => edit((s) => ({ ...s, bpm: Math.min(220, s.bpm + 4) }))} aria-label="Faster">+</button>
           </div>
-          <span className="t-sig">
-            {song.timeSignature}{metronome ? " · click on" : ""}
+          <span className="t-sig-row">
+            <button className="t-sig-btn" onClick={() => setSigOpen(true)} aria-label="Change time signature">
+              {song.timeSignature}
+            </button>
+            {metronome && <span className="t-sig">· click on</span>}
           </span>
         </div>
       </footer>
+
+      {sigOpen && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setSigOpen(false)} />
+          <div className="sheet" role="dialog" aria-label="Time signature">
+            <div className="sheet-head">
+              <span className="sheet-chord">Time signature</span>
+              <span className="sheet-roman">whole song</span>
+            </div>
+            <div className="ext-pills">
+              {TIME_SIGNATURES.map((sig) => (
+                <button
+                  key={sig}
+                  className={`ext-pill ${song.timeSignature === sig ? "ext-active" : ""}`}
+                  onClick={() => edit((s) => ({ ...s, timeSignature: sig }))}
+                >
+                  {sig}
+                </button>
+              ))}
+            </div>
+            <p className="share-note">
+              BPM stays the quarter-note pulse. Single measures can override
+              this from the chord's edit sheet.
+            </p>
+            <div className="sheet-actions">
+              <span />
+              <button className="sheet-done" onClick={() => setSigOpen(false)}>Done</button>
+            </div>
+          </div>
+        </>
+      )}
 
       {shareOpen && (
         <>
@@ -781,6 +850,24 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
                   onClick={() => setChordExt(editTarget, ext)}
                 >
                   {extLabel(ext)}
+                </button>
+              ))}
+            </div>
+            <p className="sheet-label">Measure time signature</p>
+            <div className="ext-pills">
+              <button
+                className={`ext-pill ${!editChord.sig ? "ext-active" : ""}`}
+                onClick={() => setChordSig(editTarget, undefined)}
+              >
+                song ({song.timeSignature})
+              </button>
+              {TIME_SIGNATURES.map((sig) => (
+                <button
+                  key={sig}
+                  className={`ext-pill ${editChord.sig === sig ? "ext-active" : ""}`}
+                  onClick={() => setChordSig(editTarget, sig)}
+                >
+                  {sig}
                 </button>
               ))}
             </div>
