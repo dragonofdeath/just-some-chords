@@ -65,6 +65,7 @@ export function playMidiAt(
   dest?: AudioNode
 ) {
   const ctx = ensureCtx();
+  if (gain <= 0.001) return;
   if (bank !== "synth" && isReady(bank)) {
     playSampleNote(ctx, bank, midi, t, dur, gain, dest);
     return;

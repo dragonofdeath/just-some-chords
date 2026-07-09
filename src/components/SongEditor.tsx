@@ -445,10 +445,11 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     playCfg.current = { loop: opts.loop, startPos: opts.startPos };
     const t0 = ctx.currentTime + 0.08;
     const mix = doc.playback?.mix;
+    const mute = doc.playback?.mute;
     const lvl: Record<keyof Mix, number> = {
-      chords: mixLevel(mix, "chords"),
-      bass: mixLevel(mix, "bass"),
-      drums: mixLevel(mix, "drums"),
+      chords: mute?.chords ? 0 : mixLevel(mix, "chords"),
+      bass: mute?.bass ? 0 : mixLevel(mix, "bass"),
+      drums: mute?.drums ? 0 : mixLevel(mix, "drums"),
     };
 
     const scheduleEvent = (ev: (typeof tl.events)[number], offset: number) => {
@@ -519,7 +520,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
 
   // Live tempo / mixer: restart the scheduler from the current measure when
   // BPM or a mix level changes mid-play (debounced; no count-in on restart).
-  const mixKey = JSON.stringify(doc.playback?.mix ?? {});
+  const mixKey = JSON.stringify([doc.playback?.mix ?? {}, doc.playback?.mute ?? {}]);
   useEffect(() => {
     if (!playingRef.current) return;
     const id = setTimeout(() => {
@@ -799,9 +800,21 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
             </svg>
           </button>
         )}
-        <button className="save-btn" onClick={() => save()} disabled={saving || !dirty}>
-          {saving ? "Saving…" : dirty ? "Save" : "Saved"}
-        </button>
+        {dirty && (needsLogin || (source === "shared" && !itemId) || !!saveError) ? (
+          <button className="save-btn" onClick={() => save()} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        ) : (
+          <button
+            className="save-btn save-quiet"
+            onClick={() => save()}
+            disabled={!dirty || saving}
+            aria-label={saving || dirty ? "Saving" : "Saved"}
+          >
+            <span className={`sync-dot ${saving || dirty ? "sync-busy" : ""}`} />
+            Saved
+          </button>
+        )}
       </header>
       {saveError && <p className="save-error">{saveError}</p>}
       {source === "shared" && !itemId && (
@@ -810,6 +823,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       {needsLogin && (
         <p className="shared-note">Changes are kept on this device — tap Save to sign in and keep them in your songbook.</p>
       )}
+      {doc.note && <p className="note-text note-song">{doc.note}</p>}
 
       <div className="key-row">
         <button className="key-arrow" onClick={() => rotateKey(-1)} aria-label="Transpose down a fifth">←</button>
@@ -1072,6 +1086,9 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           doc={doc}
           ai={partSheet}
           onRename={(name) => editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, name })), "rename")}
+          onNote={(note) =>
+            editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, note: note.trim() ? note : undefined })), "note-part")
+          }
           onRepeat={(delta) =>
             editDoc((d) => ({
               ...d,
@@ -1137,6 +1154,12 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           doc={doc}
           ai={lineSheet.ai}
           li={lineSheet.li}
+          onNote={(note) =>
+            editDoc(
+              (d) => mapLine(d, lineSheet.ai, lineSheet.li, (l) => ({ ...l, note: note.trim() ? note : undefined })),
+              "note-line"
+            )
+          }
           onRepeat={(delta) =>
             editDoc((d) =>
               mapLine(d, lineSheet.ai, lineSheet.li, (l) => ({
@@ -1238,6 +1261,12 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
               `mix-${track}`
             )
           }
+          onMute={(track, muted) =>
+            editDoc((d) => ({
+              ...d,
+              playback: { ...(d.playback ?? {}), mute: { ...(d.playback?.mute ?? {}), [track]: muted } },
+            }))
+          }
           onNewPattern={() => setPatternEditor({ target: "song" })}
           onManage={() => setPatternsOpen(true)}
           onClose={() => setSoundOpen(false)}
@@ -1279,7 +1308,8 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       )}
 
       {sigOpen && (
-        <Sheet title="Time signature" sub="whole song" label="Time signature" onClose={() => setSigOpen(false)}>
+        <Sheet title="Song settings" sub="whole song" label="Song settings" onClose={() => setSigOpen(false)}>
+          <p className="sheet-label">Time signature</p>
           <div className="ext-pills">
             {TIME_SIGNATURES.map((sig) => (
               <button
@@ -1294,6 +1324,17 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           <p className="share-note">
             BPM stays the quarter-note pulse. Single measures can override this from the measure's edit sheet.
           </p>
+          <p className="sheet-label">Song notes — shown under the title</p>
+          <textarea
+            className="note-input"
+            rows={3}
+            value={doc.note ?? ""}
+            onChange={(e) =>
+              editDoc((d) => ({ ...d, note: e.target.value.trim() ? e.target.value : undefined }), "note-song")
+            }
+            placeholder="e.g. capo 2, original by…, tune down half step"
+            aria-label="Song notes"
+          />
           <div className="sheet-actions">
             <span />
             <button className="sheet-done" onClick={() => setSigOpen(false)}>Done</button>

@@ -11,6 +11,7 @@ export interface Placement {
 export interface Line {
   measures: Measure[];
   repeat?: number; // 1–16, repeats inside the section
+  note?: string; // free-text annotation ("palm mute", lyrics cue, …)
 }
 
 export interface Measure {
@@ -25,6 +26,7 @@ export interface Measure {
 export interface Part {
   name: string;
   lines: Line[];
+  note?: string;
 }
 
 export interface CustomPattern {
@@ -41,6 +43,12 @@ export interface Mix {
   drums?: number;
 }
 
+export interface Mute {
+  chords?: boolean;
+  bass?: boolean;
+  drums?: boolean;
+}
+
 export interface PlaybackConfig {
   pattern?: string; // chord-instrument pattern id, default "block"
   bass?: boolean;
@@ -48,6 +56,9 @@ export interface PlaybackConfig {
   drums?: string; // "off" | "click" | "rock" | "pop8" | "waltz" | "shuffle"
   countIn?: boolean;
   mix?: Mix;
+  // Temporarily silence a track without touching patterns (patterns may
+  // carry per-measure overrides that an "off" preset would lose).
+  mute?: Mute;
 }
 
 export function mixLevel(mix: Mix | undefined, track: keyof Mix): number {
@@ -61,6 +72,11 @@ export interface SongDocV2 {
   arrangement: Placement[];
   patterns?: Record<string, CustomPattern>;
   playback?: PlaybackConfig;
+  note?: string;
+}
+
+export function cleanNote(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() ? v.slice(0, 1000) : undefined;
 }
 
 // Position of a measure in the ARRANGEMENT (instance-addressed, not part id):
@@ -143,9 +159,13 @@ export function migrateSong(raw: any): SongDocV2 {
         .map((l: any) => {
           const line: Line = { measures: (Array.isArray(l?.measures) ? l.measures : []).map(sanitizeMeasure) };
           if (l?.repeat && clampRepeat(l.repeat) > 1) line.repeat = clampRepeat(l.repeat);
+          const note = cleanNote(l?.note);
+          if (note) line.note = note;
           return line;
         });
       parts[id] = { name: typeof p.name === "string" ? p.name : "Part", lines: lines.length ? lines : [{ measures: [] }] };
+      const pnote = cleanNote(p.note);
+      if (pnote) parts[id].note = pnote;
     }
     const arrangement = raw.arrangement
       .filter((pl: any) => pl && parts[pl.part])
@@ -179,8 +199,17 @@ export function migrateSong(raw: any): SongDocV2 {
           drums: mixLevel(raw.playback.mix, "drums"),
         };
       }
+      if (raw.playback.mute && typeof raw.playback.mute === "object") {
+        pb.mute = {
+          chords: raw.playback.mute.chords === true,
+          bass: raw.playback.mute.bass === true,
+          drums: raw.playback.mute.drums === true,
+        };
+      }
       doc.playback = pb;
     }
+    const dnote = cleanNote(raw.note);
+    if (dnote) doc.note = dnote;
     return doc;
   }
 

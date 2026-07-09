@@ -200,6 +200,8 @@ export default function PartView({
               </span>
             </div>
 
+            {part.note && <p className="note-text">{part.note}</p>}
+
             {part.lines.map((line, li) => {
               const lineActive = partActive && active.li === li;
               return (
@@ -209,6 +211,7 @@ export default function PartView({
                   className={`line-row ${lineActive ? "line-active" : ""}`}
                   onClick={() => onTapLine(ai, li)}
                 >
+                  {line.note && <p className="note-text note-on-line">{line.note}</p>}
                   <div className="chips">
                     {moveMode && dropMark(ai, li, 0)}
                     {line.measures.length === 0 && !moveMode && (

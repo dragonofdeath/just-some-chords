@@ -7,6 +7,7 @@ interface PartProps {
   doc: SongDocV2;
   ai: number;
   onRename: (name: string) => void;
+  onNote: (note: string) => void;
   onRepeat: (delta: number) => void;
   onMove: (dir: -1 | 1) => void;
   onAddLine: () => void;
@@ -20,6 +21,7 @@ export function PartSheet({
   doc,
   ai,
   onRename,
+  onNote,
   onRepeat,
   onMove,
   onAddLine,
@@ -56,6 +58,16 @@ export function PartSheet({
         ))}
       </div>
 
+      <p className="sheet-label">Notes — shown under the part name</p>
+      <textarea
+        className="note-input"
+        rows={2}
+        value={at.part.note ?? ""}
+        onChange={(e) => onNote(e.target.value)}
+        placeholder="e.g. half-time feel, lyrics cue…"
+        aria-label="Part notes"
+      />
+
       <div className="repeat-row">
         <span className="repeat-label">Repeats (this placement)</span>
         <div className="repeat-stepper">
@@ -91,6 +103,7 @@ interface LineProps {
   doc: SongDocV2;
   ai: number;
   li: number;
+  onNote: (note: string) => void;
   onRepeat: (delta: number) => void;
   onMove: (dir: -1 | 1) => void;
   onDuplicate: () => void;
@@ -99,7 +112,7 @@ interface LineProps {
   onClose: () => void;
 }
 
-export function LineSheet({ doc, ai, li, onRepeat, onMove, onDuplicate, onLoop, onDelete, onClose }: LineProps) {
+export function LineSheet({ doc, ai, li, onNote, onRepeat, onMove, onDuplicate, onLoop, onDelete, onClose }: LineProps) {
   const at = partAt(doc, ai);
   const line = at?.part.lines[li];
   if (!at || !line) return null;
@@ -112,6 +125,16 @@ export function LineSheet({ doc, ai, li, onRepeat, onMove, onDuplicate, onLoop, 
       label="Edit line"
       onClose={onClose}
     >
+      <p className="sheet-label">Notes — shown above the line</p>
+      <textarea
+        className="note-input"
+        rows={2}
+        value={line.note ?? ""}
+        onChange={(e) => onNote(e.target.value)}
+        placeholder="e.g. upstrokes only, build up…"
+        aria-label="Line notes"
+      />
+
       <div className="repeat-row">
         <span className="repeat-label">Repeats</span>
         <div className="repeat-stepper">

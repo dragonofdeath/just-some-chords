@@ -19,6 +19,7 @@ interface Props {
   onBassPattern: (id: string) => void;
   onDrums: (id: string) => void;
   onMix: (track: keyof Mix, value: number) => void;
+  onMute: (track: keyof Mix, muted: boolean) => void;
   onNewPattern: () => void;
   onManage: () => void;
   onClose: () => void;
@@ -33,6 +34,7 @@ export default function SoundSheet({
   onBassPattern,
   onDrums,
   onMix,
+  onMute,
   onNewPattern,
   onManage,
   onClose,
@@ -47,19 +49,31 @@ export default function SoundSheet({
   return (
     <Sheet title="Sound" sub="whole song" label="Sound settings" onClose={onClose}>
       <p className="sheet-label">Mixer</p>
-      {MIX_TRACKS.map(({ key, label }) => (
-        <div className="mix-row" key={key}>
-          <span className="mix-name">{label}</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(mixLevel(pb.mix, key) * 100)}
-            onChange={(e) => onMix(key, Number(e.target.value) / 100)}
-            aria-label={`${label} volume`}
-          />
-        </div>
-      ))}
+      {MIX_TRACKS.map(({ key, label }) => {
+        const muted = pb.mute?.[key] === true;
+        return (
+          <div className="mix-row" key={key}>
+            <span className="mix-name">{label}</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(mixLevel(pb.mix, key) * 100)}
+              onChange={(e) => onMix(key, Number(e.target.value) / 100)}
+              aria-label={`${label} volume`}
+            />
+            <button
+              className={`mix-mute ${muted ? "mix-muted" : ""}`}
+              onClick={() => onMute(key, !muted)}
+              aria-pressed={muted}
+              aria-label={`Mute ${label}`}
+              title={muted ? "Unmute" : "Mute"}
+            >
+              M
+            </button>
+          </div>
+        );
+      })}
 
       <p className="sheet-label">Chord instrument</p>
       <div className="ext-pills">
