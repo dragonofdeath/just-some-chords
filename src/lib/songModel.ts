@@ -278,6 +278,42 @@ export function withDiv(m: Measure, div: number[]): Measure {
   return { ...m, slots, div: clean };
 }
 
+/**
+ * Move measures [a..b] of one line to `index` in another (or the same) line.
+ * Instance-addressed, but resolved through part ids so two placements of a
+ * shared part count as the same underlying line.
+ */
+export function moveMeasures(
+  doc: SongDocV2,
+  from: { ai: number; li: number; a: number; b: number },
+  to: { ai: number; li: number; index: number }
+): SongDocV2 {
+  const src = partAt(doc, from.ai);
+  const dst = partAt(doc, to.ai);
+  if (!src || !dst) return doc;
+  const moving = src.part.lines[from.li]?.measures.slice(from.a, from.b + 1) ?? [];
+  if (!moving.length || !dst.part.lines[to.li]) return doc;
+  const count = moving.length;
+
+  let idx = Math.max(0, Math.floor(to.index));
+  const sameLine = src.partId === dst.partId && from.li === to.li;
+  if (sameLine) {
+    if (idx > from.b) idx -= count;
+    else if (idx >= from.a) idx = from.a; // dropped inside the moved range
+  }
+
+  let out = mapLine(doc, from.ai, from.li, (l) => ({
+    ...l,
+    measures: l.measures.filter((_, i) => i < from.a || i > from.b),
+  }));
+  out = mapLine(out, to.ai, to.li, (l) => {
+    const measures = [...l.measures];
+    measures.splice(Math.min(idx, measures.length), 0, ...moving);
+    return { ...l, measures };
+  });
+  return out;
+}
+
 /** Shift every chord by `delta` circle-of-fifths positions (transpose). */
 export function transposeDoc(doc: SongDocV2, delta: number): SongDocV2 {
   const shift = (c: Chord | null): Chord | null =>

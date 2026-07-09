@@ -762,6 +762,28 @@ const { title = "Just Some Chords" } = Astro.props;
     white-space: nowrap;
   }
 
+  /* move mode */
+  .drop-mark {
+    width: 16px;
+    align-self: stretch;
+    min-height: 40px;
+    margin: 1px 0;
+    border: 1px dashed var(--green);
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .drop-hot {
+    background: var(--wedge-in);
+    border-style: solid;
+    border-width: 2px;
+  }
+  .chip-moving {
+    opacity: 0.35;
+  }
+
   /* split-measure grid */
   .split-grid {
     display: flex;

@@ -17,6 +17,7 @@ import {
   newPartId,
   newPatternId,
   partAt,
+  moveMeasures,
   removeCustomPattern,
   transposeDoc,
   withDiv,
@@ -148,6 +149,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const [sel, setSel] = useState<Sel | null>(null);
   const [activeSlot, setActiveSlot] = useState(0);
   const [pickingTo, setPickingTo] = useState(false);
+  const [moveSel, setMoveSel] = useState<Sel | null>(null); // measures being moved
   const [measureSettingsOpen, setMeasureSettingsOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [partSheet, setPartSheet] = useState<number | null>(null);
@@ -345,6 +347,25 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     );
   };
 
+  // Hold-to-move: long-pressing a measure lifts it (or the selection it sits
+  // inside); dropping — or tapping a marker — places it, even across parts.
+  const startMove = (ai: number, li: number, mi: number) => {
+    const within = sel && sel.ai === ai && sel.li === li && mi >= sel.a && mi <= sel.b ? sel : null;
+    const ms = within ?? { ai, li, a: mi, b: mi };
+    setSel(ms);
+    setMoveSel(ms);
+    setPickingTo(false);
+  };
+
+  const dropMove = (ai: number, li: number, index: number) => {
+    if (!moveSel) return;
+    editDoc((d) => moveMeasures(d, moveSel, { ai, li, index }));
+    setActive({ ai, li });
+    setMoveSel(null);
+    setSel(null);
+    setActiveSlot(0);
+  };
+
   // Rotating the key TRANSPOSES the song: every chord shifts with the key,
   // so the roman-numeral harmony stays identical in the new key.
   const rotateKey = (dir: 1 | -1) => {
@@ -359,6 +380,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     setSel(null);
     setActiveSlot(0);
     setPickingTo(false);
+    setMoveSel(null);
   };
 
   // ---------- playback ----------
@@ -836,6 +858,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         doc={doc}
         keyIdx={keyIdx}
         sel={sel}
+        moveSel={moveSel}
         playPos={playPos}
         playing={playing}
         active={active}
@@ -844,6 +867,8 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           else rowRefs.current.delete(`${ai}:${li}`);
         }}
         onTapMeasure={tapMeasure}
+        onMoveStart={startMove}
+        onDrop={dropMove}
         onTapLine={(ai, li) => setActive({ ai, li })}
         onOpenPart={(ai) => {
           setActive({ ai, li: 0 });
@@ -856,14 +881,23 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         onAdd={() => setAddOpen(true)}
       />
 
-      {sel && sel.b > sel.a && (
+      {moveSel && (
+        <div className="sel-bar">
+          <span className="sel-info">
+            Moving {moveSel.b - moveSel.a + 1 === 1 ? "1 measure" : `${moveSel.b - moveSel.a + 1} measures`} — drop it, or tap a slot marker
+          </span>
+          <button className="sel-clear" onClick={() => setMoveSel(null)} aria-label="Cancel move">✕</button>
+        </div>
+      )}
+
+      {!moveSel && sel && sel.b > sel.a && (
         <div className="sel-bar">
           <span className="sel-info">{sel.b - sel.a + 1} measures — play loops this range</span>
           <button className="sel-clear" onClick={() => setSel(null)} aria-label="Clear selection">✕</button>
         </div>
       )}
 
-      {selPos && selMeasure && (
+      {!moveSel && selPos && selMeasure && (
         <div className="edit-strip">
           <div className="strip-row strip-scroll">
             {selMeasure.slots.map((s, i) => (
@@ -908,6 +942,13 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
               aria-label="Select a range up to another measure"
             >
               to…
+            </button>
+            <button
+              className="strip-mini strip-to"
+              onClick={() => sel && setMoveSel(sel)}
+              aria-label="Move this selection"
+            >
+              Move
             </button>
             <button
               className="strip-mini"
