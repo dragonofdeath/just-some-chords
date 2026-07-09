@@ -94,11 +94,12 @@ interface LineProps {
   onRepeat: (delta: number) => void;
   onMove: (dir: -1 | 1) => void;
   onDuplicate: () => void;
+  onLoop: () => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
-export function LineSheet({ doc, ai, li, onRepeat, onMove, onDuplicate, onDelete, onClose }: LineProps) {
+export function LineSheet({ doc, ai, li, onRepeat, onMove, onDuplicate, onLoop, onDelete, onClose }: LineProps) {
   const at = partAt(doc, ai);
   const line = at?.part.lines[li];
   if (!at || !line) return null;
@@ -120,6 +121,7 @@ export function LineSheet({ doc, ai, li, onRepeat, onMove, onDuplicate, onDelete
         </div>
       </div>
       <div className="part-actions">
+        <button className="part-btn" disabled={line.measures.length === 0} onClick={onLoop}>⟳ Loop this line</button>
         <button className="part-btn" disabled={li === 0} onClick={() => onMove(-1)}>↑ Move up</button>
         <button className="part-btn" disabled={li === at.part.lines.length - 1} onClick={() => onMove(1)}>↓ Move down</button>
         <button className="part-btn" onClick={onDuplicate}>⧉ Duplicate</button>

@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import type { Measure, Pos, SongDocV2 } from "../lib/songModel";
 import { clampRepeat } from "../lib/songModel";
 import { chordLabel, chordRoman, type Chord } from "../lib/theory";
@@ -19,7 +18,6 @@ interface Props {
   active: { ai: number; li: number };
   registerRow: (ai: number, li: number, el: HTMLElement | null) => void;
   onTapMeasure: (ai: number, li: number, mi: number) => void;
-  onDragRange: (ai: number, li: number, from: number, to: number) => void;
   onTapLine: (ai: number, li: number) => void;
   onOpenPart: (ai: number) => void;
   onOpenLine: (ai: number, li: number) => void;
@@ -49,41 +47,11 @@ export default function PartView({
   active,
   registerRow,
   onTapMeasure,
-  onDragRange,
   onTapLine,
   onOpenPart,
   onOpenLine,
   onAdd,
 }: Props) {
-  // Drag-select: touch implicitly captures the pressed element, so extension
-  // is resolved via elementFromPoint against the chips' data attributes.
-  const drag = useRef<{ ai: number; li: number; mi: number; moved: boolean } | null>(null);
-
-  const onChipPointerDown = (ai: number, li: number, mi: number) => {
-    drag.current = { ai, li, mi, moved: false };
-  };
-  const onChipPointerMove = (e: React.PointerEvent) => {
-    const d = drag.current;
-    if (!d) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("[data-mi]") as HTMLElement | null;
-    if (!el) return;
-    const ai = Number(el.dataset.ai);
-    const li = Number(el.dataset.li);
-    const mi = Number(el.dataset.mi);
-    if (ai !== d.ai || li !== d.li) return; // ranges live within one line
-    if (mi === d.mi && !d.moved) return; // still on the start measure
-    d.moved = true;
-    onDragRange(d.ai, d.li, d.mi, mi);
-  };
-  const onChipPointerCancel = () => {
-    drag.current = null;
-  };
-  const onChipClick = (ai: number, li: number, mi: number) => {
-    const wasDrag = drag.current?.moved === true;
-    drag.current = null;
-    if (!wasDrag) onTapMeasure(ai, li, mi);
-  };
-
   return (
     <div className="sections-scroll">
       {doc.arrangement.map((pl, ai) => {
@@ -132,17 +100,11 @@ export default function PartView({
                       return (
                         <button
                           key={mi}
-                          data-ai={ai}
-                          data-li={li}
-                          data-mi={mi}
                           className={`chip ${selected ? "chip-selected" : ""} ${isPlaying ? "chip-playing" : ""}`}
-                          title="Tap to select, drag to select a range"
-                          onPointerDown={() => onChipPointerDown(ai, li, mi)}
-                          onPointerMove={onChipPointerMove}
-                          onPointerCancel={onChipPointerCancel}
+                          title="Tap to select"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onChipClick(ai, li, mi);
+                            onTapMeasure(ai, li, mi);
                           }}
                         >
                           <span className="c-name">{measureTop(m)}</span>

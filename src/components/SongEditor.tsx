@@ -141,6 +141,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const [active, setActive] = useState<{ ai: number; li: number }>({ ai: 0, li: 0 });
   const [sel, setSel] = useState<Sel | null>(null);
   const [activeSlot, setActiveSlot] = useState(0);
+  const [pickingTo, setPickingTo] = useState(false);
   const [measureSettingsOpen, setMeasureSettingsOpen] = useState(false);
   const [partSheet, setPartSheet] = useState<number | null>(null);
   const [lineSheet, setLineSheet] = useState<{ ai: number; li: number } | null>(null);
@@ -207,6 +208,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     });
     setSel(null);
     setActiveSlot(0);
+    setPickingTo(false);
     setDirty(true);
     setHistVer((v) => v + 1);
   };
@@ -221,6 +223,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     });
     setSel(null);
     setActiveSlot(0);
+    setPickingTo(false);
     setDirty(true);
     setHistVer((v) => v + 1);
   };
@@ -295,22 +298,22 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     );
   };
 
-  // Tap always selects a single measure (tap the selected one to clear);
-  // ranges come only from dragging across measures.
+  // Tap selects a single measure (tap the selected one to clear). Ranges:
+  // select the first measure, tap "to…" in the strip, tap the last measure.
   const tapMeasure = (ai: number, li: number, mi: number) => {
     setActive({ ai, li });
     setActiveSlot(0);
+    if (pickingTo && sel && sel.ai === ai && sel.li === li && mi !== sel.a) {
+      setSel({ ai, li, a: Math.min(sel.a, mi), b: Math.max(sel.a, mi) });
+      setPickingTo(false);
+      return;
+    }
+    setPickingTo(false);
     setSel((cur) =>
       cur && cur.ai === ai && cur.li === li && cur.a === mi && cur.b === mi
         ? null
         : { ai, li, a: mi, b: mi }
     );
-  };
-
-  const dragRange = (ai: number, li: number, from: number, to: number) => {
-    setActive({ ai, li });
-    setActiveSlot(0);
-    setSel({ ai, li, a: Math.min(from, to), b: Math.max(from, to) });
   };
 
   // Rotating the key TRANSPOSES the song: every chord shifts with the key,
@@ -326,6 +329,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const clearTransient = () => {
     setSel(null);
     setActiveSlot(0);
+    setPickingTo(false);
   };
 
   // ---------- playback ----------
@@ -789,7 +793,6 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           else rowRefs.current.delete(`${ai}:${li}`);
         }}
         onTapMeasure={tapMeasure}
-        onDragRange={dragRange}
         onTapLine={(ai, li) => setActive({ ai, li })}
         onOpenPart={(ai) => {
           setActive({ ai, li: 0 });
@@ -855,6 +858,13 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
               —
             </button>
             <button
+              className={`strip-mini strip-to ${pickingTo ? "strip-mini-active" : ""}`}
+              onClick={() => setPickingTo((p) => !p)}
+              aria-label="Select a range up to another measure"
+            >
+              to…
+            </button>
+            <button
               className="strip-mini"
               onClick={() => setMeasureSettingsOpen(true)}
               aria-label="Measure settings"
@@ -865,7 +875,9 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
             <button className="strip-mini strip-close" onClick={() => setSel(null)} aria-label="Done editing">✕</button>
           </div>
           <div className="strip-row strip-scroll">
-            {slotChord ? (
+            {pickingTo ? (
+              <span className="strip-hint">Now tap the last measure of the range — play will loop it</span>
+            ) : slotChord ? (
               EXTENSIONS.map((ext) => (
                 <button
                   key={ext || "triad"}
@@ -1057,6 +1069,13 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
               })
             );
             clearTransient();
+          }}
+          onLoop={() => {
+            const line = partAt(doc, lineSheet.ai)?.part.lines[lineSheet.li];
+            if (!line?.measures.length) return;
+            setSel({ ai: lineSheet.ai, li: lineSheet.li, a: 0, b: line.measures.length - 1 });
+            setActive({ ai: lineSheet.ai, li: lineSheet.li });
+            setLineSheet(null);
           }}
           onDelete={() => {
             editDoc((d) => mapLine(d, lineSheet.ai, lineSheet.li, () => null));
