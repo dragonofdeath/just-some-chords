@@ -312,7 +312,9 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const tapChord = (idx: number, quality: "maj" | "min") => {
     const chord: Chord = { idx, quality };
     playChordAt(chordSemis(chord), 0, 1.2, instrument);
-    if (selPos) {
+    // replace only when the selection is on the ACTIVE line — otherwise the
+    // wheel appends to wherever "adding here" points
+    if (selPos && selPos.ai === active.ai && selPos.li === active.li) {
       // a measure is selected — the wheel replaces its active slot
       editDoc((d) =>
         mapMeasure(d, selPos, (m) => ({
@@ -883,7 +885,14 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         onTapMeasure={tapMeasure}
         onMoveStart={startMove}
         onDrop={dropMove}
-        onTapLine={(ai, li) => setActive({ ai, li })}
+        onTapLine={(ai, li) => {
+          setActive({ ai, li });
+          // tapping outside the chips deselects — the wheel goes back to
+          // appending where "adding here" points
+          setSel(null);
+          setActiveSlot(0);
+          setPickingTo(false);
+        }}
         onOpenPart={(ai) => {
           setActive({ ai, li: 0 });
           setPartSheet(ai);
