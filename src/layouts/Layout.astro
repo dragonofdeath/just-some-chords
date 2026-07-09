@@ -762,6 +762,41 @@ const { title = "Just Some Chords" } = Astro.props;
     white-space: nowrap;
   }
 
+  /* split-measure grid */
+  .split-grid {
+    display: flex;
+    gap: 0;
+    margin: 4px 0 10px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    overflow: hidden;
+    height: 52px;
+  }
+  .split-cell {
+    flex: 1;
+    border: none;
+    border-left: 1px solid var(--rule-soft);
+    background: var(--paper);
+    cursor: pointer;
+    padding: 0;
+    min-width: 0;
+  }
+  .split-cell:first-child {
+    border-left: none;
+  }
+  .split-alt {
+    background: var(--wedge-in);
+  }
+  .split-beat {
+    border-left: 2px solid var(--ink-soft);
+  }
+  .split-beat:first-child {
+    border-left: none;
+  }
+  .split-bound {
+    border-left: 3px solid var(--green);
+  }
+
   /* selection toolbar */
   .sel-bar {
     display: flex;

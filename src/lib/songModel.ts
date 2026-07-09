@@ -14,7 +14,10 @@ export interface Line {
 }
 
 export interface Measure {
-  slots: (Chord | null)[]; // 1–4 equal divisions; null slot = rest
+  slots: (Chord | null)[]; // chord slots; null slot = rest
+  // Slot lengths in 16th-note cells (relative weights — robust to a later
+  // signature change). Absent = equal division.
+  div?: number[];
   sig?: string; // per-measure time signature override
   pat?: string; // per-measure rhythm-pattern override (pattern id)
 }
@@ -101,9 +104,17 @@ function sanitizeChord(c: any): Chord | null {
 
 function sanitizeMeasure(m: any): Measure {
   const raw = Array.isArray(m?.slots) ? m.slots : [null];
-  const slots = raw.slice(0, 4).map(sanitizeChord);
+  const slots = raw.slice(0, 8).map(sanitizeChord);
   if (!slots.length) slots.push(null);
   const out: Measure = { slots };
+  if (
+    Array.isArray(m?.div) &&
+    m.div.length === slots.length &&
+    slots.length > 1 &&
+    m.div.every((v: any) => typeof v === "number" && Number.isFinite(v) && v >= 1)
+  ) {
+    out.div = m.div.map((v: number) => Math.floor(v));
+  }
   if (typeof m?.sig === "string" && m.sig) out.sig = m.sig;
   if (typeof m?.pat === "string" && m.pat) out.pat = m.pat;
   return out;
@@ -232,13 +243,39 @@ export function measureAt(doc: SongDocV2, pos: Pos): Measure | null {
   return partAt(doc, pos.ai)?.part.lines[pos.li]?.measures[pos.mi] ?? null;
 }
 
-/** Resize a measure's slot count (1–4); growing repeats the last chord. */
-export function withSlotCount(m: Measure, count: number): Measure {
-  const k = Math.min(4, Math.max(1, Math.floor(count)));
-  const slots = m.slots.slice(0, k);
-  const fill = [...m.slots].reverse().find((s) => s !== null) ?? null;
-  while (slots.length < k) slots.push(fill ? { ...fill } : null);
-  return { ...m, slots };
+/**
+ * Re-split a measure into slots with the given 16th-cell lengths, mapping
+ * each new slot to the chord that was sounding at its start position.
+ */
+export function withDiv(m: Measure, div: number[]): Measure {
+  const clean = div.filter((v) => Number.isFinite(v) && v >= 1).slice(0, 8);
+  if (!clean.length) return m;
+  const total = clean.reduce((s, v) => s + v, 0);
+  const oldDiv = m.div && m.div.length === m.slots.length ? m.div : m.slots.map(() => 1);
+  const oldTotal = oldDiv.reduce((s, v) => s + v, 0);
+  const oldStarts: number[] = [];
+  let oacc = 0;
+  m.slots.forEach((_, i) => {
+    oldStarts.push(oacc / oldTotal);
+    oacc += oldDiv[i];
+  });
+  const slots: (Chord | null)[] = [];
+  let pos = 0;
+  for (const len of clean) {
+    const frac = pos / total;
+    let oi = 0;
+    for (let i = 0; i < oldStarts.length; i++) {
+      if (oldStarts[i] <= frac + 1e-9) oi = i;
+    }
+    const src = m.slots[oi];
+    slots.push(src ? { ...src } : null);
+    pos += len;
+  }
+  if (clean.length === 1) {
+    const { div: _drop, ...rest } = m;
+    return { ...rest, slots };
+  }
+  return { ...m, slots, div: clean };
 }
 
 /** Shift every chord by `delta` circle-of-fifths positions (transpose). */

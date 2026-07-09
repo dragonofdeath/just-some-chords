@@ -19,7 +19,7 @@ import {
   partAt,
   removeCustomPattern,
   transposeDoc,
-  withSlotCount,
+  withDiv,
   type Mix,
   type Pos,
   type SongDocV2,
@@ -44,6 +44,7 @@ import MeasureSettingsSheet from "./sheets/MeasureSettingsSheet";
 import SoundSheet from "./sheets/SoundSheet";
 import PatternEditorSheet, { type PatternDraft } from "./sheets/PatternEditorSheet";
 import PatternsSheet from "./sheets/PatternsSheet";
+import SplitSheet from "./sheets/SplitSheet";
 import { AddPartSheet, LineSheet, PartSheet } from "./sheets/PartSheet";
 import Sheet from "./sheets/Sheet";
 
@@ -148,6 +149,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const [activeSlot, setActiveSlot] = useState(0);
   const [pickingTo, setPickingTo] = useState(false);
   const [measureSettingsOpen, setMeasureSettingsOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
   const [partSheet, setPartSheet] = useState<number | null>(null);
   const [lineSheet, setLineSheet] = useState<{ ai: number; li: number } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -874,19 +876,13 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
               </button>
             ))}
             <span className="strip-div" />
-            {[1, 2, 3, 4].map((k) => (
-              <button
-                key={k}
-                className={`strip-mini ${selMeasure.slots.length === k ? "strip-mini-active" : ""}`}
-                onClick={() => {
-                  editSlot((slots) => withSlotCount({ slots }, k).slots);
-                  setActiveSlot((s) => Math.min(s, k - 1));
-                }}
-                aria-label={`${k} chords in this measure`}
-              >
-                {k}
-              </button>
-            ))}
+            <button
+              className="strip-mini strip-to"
+              onClick={() => setSplitOpen(true)}
+              aria-label="Split this measure"
+            >
+              Split
+            </button>
             <span className="strip-div" />
             <button
               className={`strip-mini ${!slotChord ? "strip-mini-active" : ""}`}
@@ -998,6 +994,19 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           </span>
         </div>
       </footer>
+
+      {splitOpen && selPos && selMeasure && (
+        <SplitSheet
+          measure={selMeasure}
+          sig={selMeasure.sig ?? song.timeSignature}
+          onApply={(div) => {
+            editDoc((d) => mapMeasure(d, selPos, (m) => withDiv(m, div)));
+            setActiveSlot(0);
+            setSplitOpen(false);
+          }}
+          onClose={() => setSplitOpen(false)}
+        />
+      )}
 
       {measureSettingsOpen && selPos && selMeasure && (
         <MeasureSettingsSheet

@@ -110,7 +110,17 @@ export function buildTimeline(doc: SongDocV2, opts: TimelineOpts): Timeline {
     const beat = beatSeconds(sig, opts.bpm);
     const barSec = n * beat;
     const slots = measure.slots.length ? measure.slots : [null];
-    const slotBeats = n / slots.length;
+    // slot boundaries in beats — weighted when the measure has a custom split
+    const weights =
+      measure.div && measure.div.length === slots.length ? measure.div : slots.map(() => 1);
+    const wTotal = weights.reduce((s, v) => s + v, 0);
+    const bounds: number[] = [];
+    let wAcc = 0;
+    for (const w of weights) {
+      bounds.push((wAcc / wTotal) * n);
+      wAcc += w;
+    }
+    bounds.push(n);
     ticks.push({ tSec: at, pos });
 
     // split a pattern event at slot boundaries; each piece sounds its slot's
@@ -120,9 +130,12 @@ export function buildTimeline(doc: SongDocV2, opts: TimelineOpts): Timeline {
       const end = Math.min(n, t0 + dur);
       let first = true;
       while (t < end - 1e-6) {
-        const si = Math.min(slots.length - 1, Math.floor(t / slotBeats + 1e-6));
-        const slotEnd = (si + 1) * slotBeats;
-        const pieceEnd = Math.min(end, slotEnd);
+        let si = 0;
+        for (let i = 0; i < slots.length; i++) {
+          if (bounds[i] <= t + 1e-6) si = i;
+        }
+        const pieceEnd = Math.min(end, bounds[si + 1]);
+        if (pieceEnd <= t + 1e-6) break;
         const chord = slots[si];
         if (chord) make(chord, t, pieceEnd - t, first);
         first = false;
