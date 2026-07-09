@@ -20,6 +20,7 @@ export const BUILTIN_PATTERNS: Record<string, string> = {
   "arp-up": "Arpeggio up",
   "arp-updown": "Arpeggio up-down",
   waltz: "Waltz",
+  skank: "Offbeat (skank)",
   off: "Off", // chords silent — bass/drums only
 };
 
@@ -78,6 +79,19 @@ function waltzPattern(n: number, d: number): PatternEvent[] {
   return out;
 }
 
+// Ska/reggae upstrokes: clipped chord stabs on every offbeat eighth ("&"s).
+// The short duration is what makes it read as a muted upstroke.
+function skankPattern(n: number, d: number): PatternEvent[] {
+  const e = eighthOf(d);
+  const out: PatternEvent[] = [];
+  let i = 0;
+  for (let t = 0; t < n - 1e-6; t += e) {
+    if (i % 2 === 1) out.push({ t, dur: e * 0.45, kind: "block" });
+    i++;
+  }
+  return out;
+}
+
 function compileCustom(steps: string, n: number, d: number): PatternEvent[] {
   const cell = eighthOf(d);
   const cells = Math.max(1, Math.round(n / cell));
@@ -118,6 +132,8 @@ export function chordPatternEvents(id: string, n: number, d: number, custom?: Cu
       return arpPattern(n, d, [0, 1, 2, 3, 2, 1]);
     case "waltz":
       return waltzPattern(n, d);
+    case "skank":
+      return skankPattern(n, d);
     default:
       if (custom) return compileCustom(custom.steps, n, d);
       return blockPattern(n);
