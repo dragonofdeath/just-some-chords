@@ -1239,6 +1239,10 @@ const { title = "Just Some Chords" } = Astro.props;
     bottom: 0;
     width: 100%;
     max-width: 430px;
+    max-height: 88dvh; /* tall sheets scroll inside instead of overflowing the top */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     background: var(--paper-raised);
     border-top: 1px solid var(--rule);
     border-radius: 18px 18px 0 0;
