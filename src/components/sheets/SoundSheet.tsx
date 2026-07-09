@@ -1,8 +1,14 @@
 import Sheet from "./Sheet";
-import type { SongDocV2 } from "../../lib/songModel";
+import { mixLevel, type Mix, type SongDocV2 } from "../../lib/songModel";
 import { BASS_PATTERNS, BUILTIN_PATTERNS } from "../../lib/patterns";
 import { DRUM_PRESETS } from "../../lib/drums";
 import { INSTRUMENTS, instrumentLabel, type Instrument } from "../../lib/sampler";
+
+const MIX_TRACKS: Array<{ key: keyof Mix; label: string }> = [
+  { key: "chords", label: "Chords" },
+  { key: "bass", label: "Bass" },
+  { key: "drums", label: "Drums" },
+];
 
 interface Props {
   doc: SongDocV2;
@@ -12,6 +18,7 @@ interface Props {
   onBass: (on: boolean) => void;
   onBassPattern: (id: string) => void;
   onDrums: (id: string) => void;
+  onMix: (track: keyof Mix, value: number) => void;
   onNewPattern: () => void;
   onClose: () => void;
 }
@@ -24,6 +31,7 @@ export default function SoundSheet({
   onBass,
   onBassPattern,
   onDrums,
+  onMix,
   onNewPattern,
   onClose,
 }: Props) {
@@ -36,6 +44,21 @@ export default function SoundSheet({
 
   return (
     <Sheet title="Sound" sub="whole song" label="Sound settings" onClose={onClose}>
+      <p className="sheet-label">Mixer</p>
+      {MIX_TRACKS.map(({ key, label }) => (
+        <div className="mix-row" key={key}>
+          <span className="mix-name">{label}</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(mixLevel(pb.mix, key) * 100)}
+            onChange={(e) => onMix(key, Number(e.target.value) / 100)}
+            aria-label={`${label} volume`}
+          />
+        </div>
+      ))}
+
       <p className="sheet-label">Chord instrument</p>
       <div className="ext-pills">
         {INSTRUMENTS.map((i) => (

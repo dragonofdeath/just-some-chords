@@ -40,6 +40,12 @@ const { title = "Just Some Chords" } = Astro.props;
 
   * {
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* focus rings only for keyboard navigation — never for taps */
+  :focus:not(:focus-visible) {
+    outline: none;
   }
 
   html,
@@ -386,6 +392,14 @@ const { title = "Just Some Chords" } = Astro.props;
   }
   .wheelbox svg {
     touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .wedge:focus {
+    outline: none;
+  }
+  .wedge:focus-visible {
+    outline: 2px solid var(--green);
   }
   .wedge {
     cursor: pointer;
@@ -788,6 +802,27 @@ const { title = "Just Some Chords" } = Astro.props;
     line-height: 1;
     color: var(--ink);
     cursor: pointer;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .mix-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 10px;
+  }
+  .mix-name {
+    width: 62px;
+    flex-shrink: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+  .mix-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--green);
+    height: 22px;
   }
   .t-sig {
     font-size: 11.5px;

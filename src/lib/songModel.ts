@@ -29,12 +29,24 @@ export interface CustomPattern {
   steps: string; // one char per eighth: "." off, "X" accent block, "x" block, "a" arp, "r" root
 }
 
+export interface Mix {
+  chords?: number; // 0–1, default 1
+  bass?: number;
+  drums?: number;
+}
+
 export interface PlaybackConfig {
   pattern?: string; // chord-instrument pattern id, default "block"
   bass?: boolean;
   bassPattern?: string; // "root5" | "root"
   drums?: string; // "off" | "click" | "rock" | "pop8" | "waltz" | "shuffle"
   countIn?: boolean;
+  mix?: Mix;
+}
+
+export function mixLevel(mix: Mix | undefined, track: keyof Mix): number {
+  const v = mix?.[track];
+  return typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
 }
 
 export interface SongDocV2 {
@@ -146,6 +158,13 @@ export function migrateSong(raw: any): SongDocV2 {
       if (typeof raw.playback.bassPattern === "string") pb.bassPattern = raw.playback.bassPattern;
       if (typeof raw.playback.drums === "string") pb.drums = raw.playback.drums;
       if (typeof raw.playback.countIn === "boolean") pb.countIn = raw.playback.countIn;
+      if (raw.playback.mix && typeof raw.playback.mix === "object") {
+        pb.mix = {
+          chords: mixLevel(raw.playback.mix, "chords"),
+          bass: mixLevel(raw.playback.mix, "bass"),
+          drums: mixLevel(raw.playback.mix, "drums"),
+        };
+      }
       doc.playback = pb;
     }
     return doc;

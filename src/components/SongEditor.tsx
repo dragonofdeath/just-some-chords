@@ -12,10 +12,12 @@ import {
   mapPart,
   measureAt,
   migrateSong,
+  mixLevel,
   newPartId,
   newPatternId,
   partAt,
   withSlotCount,
+  type Mix,
   type Pos,
   type SongDocV2,
 } from "../lib/songModel";
@@ -139,6 +141,10 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
 
   const playTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playBus = useRef<GainNode | null>(null);
+  const playCfg = useRef<{ loop?: Sel; startPos?: Pos } | null>(null);
+  const playPosRef = useRef<Pos | null>(null);
+  const playingRef = useRef(false);
+  const holdTimer = useRef<{ t?: ReturnType<typeof setTimeout>; i?: ReturnType<typeof setInterval> }>({});
   const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
   const past = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
   const future = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
@@ -295,20 +301,20 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     playTimer.current = null;
     killBus(playBus.current);
     playBus.current = null;
+    playingRef.current = false;
     setPlaying(false);
     setPlayPos(null);
   };
 
-  const togglePlay = async () => {
-    if (playing) return stop();
+  const startPlayback = async (opts: { loop?: Sel; startPos?: Pos; countIn: boolean }) => {
     const ctx = ensureCtx();
-    const loopMode = !!sel && sel.b > sel.a;
+    const loopMode = !!opts.loop;
     const tl = buildTimeline(doc, {
       bpm: song.bpm,
       sig: song.timeSignature,
-      loop: loopMode ? { ai: sel!.ai, li: sel!.li, a: sel!.a, b: sel!.b } : undefined,
-      startPos: !loopMode && sel ? { ai: sel.ai, li: sel.li, mi: sel.a } : undefined,
-      countIn: doc.playback?.countIn === true,
+      loop: opts.loop ? { ai: opts.loop.ai, li: opts.loop.li, a: opts.loop.a, b: opts.loop.b } : undefined,
+      startPos: opts.startPos,
+      countIn: opts.countIn,
     });
     if (!tl.ticks.length) return;
     // Give samples up to 2s to decode; past that, play starts on the synth.
@@ -321,28 +327,35 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     bus.gain.value = 1;
     bus.connect(ctx.destination);
     playBus.current = bus;
+    playCfg.current = { loop: opts.loop, startPos: opts.startPos };
     const t0 = ctx.currentTime + 0.08;
+    const mix = doc.playback?.mix;
+    const lvl: Record<keyof Mix, number> = {
+      chords: mixLevel(mix, "chords"),
+      bass: mixLevel(mix, "bass"),
+      drums: mixLevel(mix, "drums"),
+    };
 
     const scheduleEvent = (ev: (typeof tl.events)[number], offset: number) => {
       const rel = t0 + offset + ev.tSec - ctx.currentTime;
       switch (ev.kind) {
         case "block":
-          playChordAt(chordSemis(ev.chord!), rel, ev.dur, instrument, bus);
+          playChordAt(chordSemis(ev.chord!), rel, ev.dur, instrument, bus, lvl.chords);
           break;
         case "arp": {
           const semi = chordToneSemis(ev.chord!)[ev.tone ?? 0];
           const midi = 60 + semi + (instrument === "guitar" ? -12 : 0);
-          playMidiAt(midi, rel, ev.dur, instrument, ev.accent ? 0.5 : 0.36, bus);
+          playMidiAt(midi, rel, ev.dur, instrument, (ev.accent ? 0.5 : 0.36) * lvl.chords, bus);
           break;
         }
         case "bass":
-          playMidiAt(bassMidi(ev.chord!, (ev.tone ?? 0) as 0 | 2), rel, ev.dur, "bass", ev.accent ? 0.62 : 0.5, bus);
+          playMidiAt(bassMidi(ev.chord!, (ev.tone ?? 0) as 0 | 2), rel, ev.dur, "bass", (ev.accent ? 0.62 : 0.5) * lvl.bass, bus);
           break;
         case "drum":
-          playDrum(ctx, ev.drum!, rel, !!ev.accent, bus);
+          playDrum(ctx, ev.drum!, rel, !!ev.accent, bus, lvl.drums);
           break;
         case "click":
-          clickAt(rel, !!ev.accent, bus);
+          clickAt(rel, !!ev.accent, bus, lvl.drums);
           break;
       }
     };
@@ -351,11 +364,13 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     const musicEvents = tl.events.filter((ev) => ev.tSec >= tl.musicStart - 1e-6);
     if (loopMode) musicEvents.forEach((ev) => scheduleEvent(ev, tl.passDur)); // pass 1 pre-scheduled
 
+    playingRef.current = true;
     setPlaying(true);
     let k = 0;
     let pass = 0;
     const tick = () => {
       const t = tl.ticks[k];
+      playPosRef.current = t.pos;
       setPlayPos(t.pos);
       rowRefs.current.get(`${t.pos.ai}:${t.pos.li}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       let delaySec: number;
@@ -374,6 +389,50 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       playTimer.current = setTimeout(tick, delaySec * 1000);
     };
     playTimer.current = setTimeout(tick, (tl.ticks[0].tSec + 0.08) * 1000);
+  };
+
+  const togglePlay = () => {
+    if (playing) return stop();
+    const loopMode = !!sel && sel.b > sel.a;
+    startPlayback({
+      loop: loopMode ? sel! : undefined,
+      startPos: !loopMode && sel ? { ai: sel.ai, li: sel.li, mi: sel.a } : undefined,
+      countIn: doc.playback?.countIn === true,
+    });
+  };
+
+  // Live tempo / mixer: restart the scheduler from the current measure when
+  // BPM or a mix level changes mid-play (debounced; no count-in on restart).
+  const mixKey = JSON.stringify(doc.playback?.mix ?? {});
+  useEffect(() => {
+    if (!playingRef.current) return;
+    const id = setTimeout(() => {
+      if (!playingRef.current || !playCfg.current) return;
+      const cfg = playCfg.current;
+      const pos = playPosRef.current;
+      stop();
+      startPlayback({
+        loop: cfg.loop,
+        startPos: cfg.loop ? undefined : pos ?? cfg.startPos,
+        countIn: false,
+      });
+    }, 350);
+    return () => clearTimeout(id);
+  }, [song.bpm, mixKey]);
+
+  // ---------- BPM stepper (±1, hold to auto-repeat) ----------
+  const bumpBpm = (delta: number) =>
+    edit((s) => ({ ...s, bpm: Math.min(220, Math.max(40, s.bpm + delta)) }), "bpm");
+  const bpmHoldStart = (delta: number) => {
+    bumpBpm(delta);
+    holdTimer.current.t = setTimeout(() => {
+      holdTimer.current.i = setInterval(() => bumpBpm(delta), 70);
+    }, 450);
+  };
+  const bpmHoldEnd = () => {
+    if (holdTimer.current.t) clearTimeout(holdTimer.current.t);
+    if (holdTimer.current.i) clearInterval(holdTimer.current.i);
+    holdTimer.current = {};
   };
 
   // ---------- save / share ----------
@@ -500,8 +559,8 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
               role="button"
               tabIndex={0}
               aria-label={`${label}${inKey ? " (in key)" : ""}`}
-              onPointerDown={(e) => {
-                e.preventDefault();
+              onClick={(e) => {
+                (e.currentTarget as unknown as HTMLElement).blur?.();
                 tapChord(i, ring.q);
               }}
               onKeyDown={(e) => {
@@ -643,9 +702,25 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         </button>
         <div className="t-meta">
           <div className="t-bpm">
-            <button className="bpm-btn" onClick={() => edit((s) => ({ ...s, bpm: Math.max(40, s.bpm - 4) }), "bpm")} aria-label="Slower">−</button>
+            <button
+              className="bpm-btn"
+              onPointerDown={() => bpmHoldStart(-1)}
+              onPointerUp={bpmHoldEnd}
+              onPointerLeave={bpmHoldEnd}
+              onPointerCancel={bpmHoldEnd}
+              onContextMenu={(e) => e.preventDefault()}
+              aria-label="Slower"
+            >−</button>
             <span>{song.bpm} BPM</span>
-            <button className="bpm-btn" onClick={() => edit((s) => ({ ...s, bpm: Math.min(220, s.bpm + 4) }), "bpm")} aria-label="Faster">+</button>
+            <button
+              className="bpm-btn"
+              onPointerDown={() => bpmHoldStart(1)}
+              onPointerUp={bpmHoldEnd}
+              onPointerLeave={bpmHoldEnd}
+              onPointerCancel={bpmHoldEnd}
+              onContextMenu={(e) => e.preventDefault()}
+              aria-label="Faster"
+            >+</button>
           </div>
           <span className="t-sig-row">
             <button className="t-sig-btn" onClick={() => setSigOpen(true)} aria-label="Change time signature">
@@ -858,6 +933,15 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           }}
           onBassPattern={(id) => editDoc((d) => ({ ...d, playback: { ...(d.playback ?? {}), bassPattern: id } }))}
           onDrums={(id) => editDoc((d) => ({ ...d, playback: { ...(d.playback ?? {}), drums: id } }))}
+          onMix={(track, value) =>
+            editDoc(
+              (d) => ({
+                ...d,
+                playback: { ...(d.playback ?? {}), mix: { ...(d.playback?.mix ?? {}), [track]: value } },
+              }),
+              `mix-${track}`
+            )
+          }
           onNewPattern={() => setPatternOpen("song")}
           onClose={() => setSoundOpen(false)}
         />

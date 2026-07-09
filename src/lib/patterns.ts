@@ -20,6 +20,7 @@ export const BUILTIN_PATTERNS: Record<string, string> = {
   "arp-up": "Arpeggio up",
   "arp-updown": "Arpeggio up-down",
   waltz: "Waltz",
+  off: "Off", // chords silent — bass/drums only
 };
 
 const isCompound = (n: number, d: number) => d === 8 && n % 3 === 0;
@@ -105,6 +106,8 @@ export function patternLabel(id: string, doc: SongDocV2): string {
 /** Chord-instrument events for one measure of n/d. */
 export function chordPatternEvents(id: string, n: number, d: number, custom?: CustomPattern): PatternEvent[] {
   switch (id) {
+    case "off":
+      return [];
     case "strum-beats":
       return strumBeats(n, d);
     case "boom-chick":

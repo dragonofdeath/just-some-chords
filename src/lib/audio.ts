@@ -14,7 +14,7 @@ export function currentCtx(): AudioContext | null {
   return audioCtx;
 }
 
-function playSynthChordAt(semis: number[], t: number, dur: number, dest?: AudioNode) {
+function playSynthChordAt(semis: number[], t: number, dur: number, dest?: AudioNode, scale = 1) {
   const ctx = ensureCtx();
   const now = ctx.currentTime + t;
   semis.forEach((s, i) => {
@@ -23,7 +23,7 @@ function playSynthChordAt(semis: number[], t: number, dur: number, dest?: AudioN
     o.type = i === 0 ? "sine" : "triangle";
     o.frequency.value = f;
     const g = ctx.createGain();
-    const peak = i === 0 ? 0.15 : 0.08;
+    const peak = (i === 0 ? 0.15 : 0.08) * scale;
     g.gain.setValueAtTime(0.0001, now);
     g.gain.linearRampToValueAtTime(peak, now + 0.025);
     g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
@@ -35,11 +35,12 @@ function playSynthChordAt(semis: number[], t: number, dur: number, dest?: AudioN
 }
 
 // Instrument-aware chord playback. Falls back to the synth until samples decode.
-export function playChordAt(semis: number[], t: number, dur: number, inst: Instrument, dest?: AudioNode) {
+export function playChordAt(semis: number[], t: number, dur: number, inst: Instrument, dest?: AudioNode, scale = 1) {
   const ctx = ensureCtx();
+  if (scale <= 0.001) return;
   if (inst === "synth" || !isReady(inst)) {
     if (inst !== "synth") ensureLoaded(ctx, inst); // warm up for next time
-    playSynthChordAt(semis, t, dur, dest);
+    playSynthChordAt(semis, t, dur, dest, scale);
     return;
   }
   // Guitar sits an octave lower and strums; piano rolls just slightly.
@@ -48,7 +49,7 @@ export function playChordAt(semis: number[], t: number, dur: number, inst: Instr
   const ring = inst === "guitar" ? 1.05 : 1.0;
   semis.forEach((s, i) => {
     const midi = 60 + s + octave;
-    const gain = i === 0 ? 0.5 : 0.34;
+    const gain = (i === 0 ? 0.5 : 0.34) * scale;
     playSampleNote(ctx, inst, midi, t + i * strum, dur * ring, gain, dest);
   });
 }
@@ -83,15 +84,16 @@ export function playMidiAt(
   o.stop(now + dur + 0.05);
 }
 
-export function clickAt(t: number, accent: boolean, dest?: AudioNode) {
+export function clickAt(t: number, accent: boolean, dest?: AudioNode, scale = 1) {
   const ctx = ensureCtx();
+  if (scale <= 0.001) return;
   const now = ctx.currentTime + t;
   const o = ctx.createOscillator();
   o.type = "square";
   o.frequency.value = accent ? 1800 : 1200;
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.0001, now);
-  g.gain.linearRampToValueAtTime(accent ? 0.11 : 0.06, now + 0.002);
+  g.gain.linearRampToValueAtTime((accent ? 0.11 : 0.06) * scale, now + 0.002);
   g.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
   o.connect(g);
   g.connect(dest ?? ctx.destination);

@@ -85,7 +85,8 @@ function noiseBuffer(ctx: AudioContext): AudioBuffer {
 }
 
 /** Schedule one drum hit at ctx-relative offset t onto dest. */
-export function playDrum(ctx: AudioContext, voice: DrumVoice, t: number, accent: boolean, dest: AudioNode): void {
+export function playDrum(ctx: AudioContext, voice: DrumVoice, t: number, accent: boolean, dest: AudioNode, scale = 1): void {
+  if (scale <= 0.001) return;
   const now = ctx.currentTime + Math.max(0, t);
   if (voice === "kick") {
     const o = ctx.createOscillator();
@@ -93,7 +94,7 @@ export function playDrum(ctx: AudioContext, voice: DrumVoice, t: number, accent:
     o.frequency.setValueAtTime(150, now);
     o.frequency.exponentialRampToValueAtTime(50, now + 0.1);
     const g = ctx.createGain();
-    g.gain.setValueAtTime(accent ? 0.55 : 0.42, now);
+    g.gain.setValueAtTime((accent ? 0.55 : 0.42) * scale, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
     o.connect(g);
     g.connect(dest);
@@ -109,7 +110,7 @@ export function playDrum(ctx: AudioContext, voice: DrumVoice, t: number, accent:
     bp.frequency.value = 1800;
     bp.Q.value = 0.8;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(accent ? 0.38 : 0.28, now);
+    g.gain.setValueAtTime((accent ? 0.38 : 0.28) * scale, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
     src.connect(bp);
     bp.connect(g);
@@ -121,7 +122,7 @@ export function playDrum(ctx: AudioContext, voice: DrumVoice, t: number, accent:
     o.type = "sine";
     o.frequency.value = 180;
     const g2 = ctx.createGain();
-    g2.gain.setValueAtTime(0.16, now);
+    g2.gain.setValueAtTime(0.16 * scale, now);
     g2.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
     o.connect(g2);
     g2.connect(dest);
@@ -136,7 +137,7 @@ export function playDrum(ctx: AudioContext, voice: DrumVoice, t: number, accent:
   hp.type = "highpass";
   hp.frequency.value = 7000;
   const g = ctx.createGain();
-  g.gain.setValueAtTime(accent ? 0.16 : 0.09, now);
+  g.gain.setValueAtTime((accent ? 0.16 : 0.09) * scale, now);
   g.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
   src.connect(hp);
   hp.connect(g);
