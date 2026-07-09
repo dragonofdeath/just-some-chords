@@ -18,6 +18,7 @@ import {
   newPatternId,
   partAt,
   removeCustomPattern,
+  transposeDoc,
   withSlotCount,
   type Mix,
   type Pos,
@@ -130,6 +131,13 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       return "piano";
     }
   });
+  const [wheelCompact, setWheelCompact] = useState(() => {
+    try {
+      return localStorage.getItem("jsc-wheel") !== "full";
+    } catch {
+      return true;
+    }
+  });
   const [active, setActive] = useState<{ ai: number; li: number }>({ ai: 0, li: 0 });
   const [sel, setSel] = useState<Sel | null>(null);
   const [activeSlot, setActiveSlot] = useState(0);
@@ -153,6 +161,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const playingRef = useRef(false);
   const holdTimer = useRef<{ t?: ReturnType<typeof setTimeout>; i?: ReturnType<typeof setInterval> }>({});
   const previewBus = useRef<GainNode | null>(null);
+  const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
   const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
   const past = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
   const future = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
@@ -304,9 +313,14 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     setSel({ ai, li, a: Math.min(from, to), b: Math.max(from, to) });
   };
 
+  // Rotating the key TRANSPOSES the song: every chord shifts with the key,
+  // so the roman-numeral harmony stays identical in the new key.
   const rotateKey = (dir: 1 | -1) => {
     const next = ((keyIdx + dir) % 12 + 12) % 12;
-    edit((s) => ({ ...s, songKey: FIFTHS[next].maj }), "key");
+    edit(
+      (s) => ({ ...s, songKey: FIFTHS[next].maj, sections: transposeDoc(s.sections, dir) }),
+      "key"
+    );
   };
 
   const clearTransient = () => {
@@ -315,12 +329,39 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   };
 
   // ---------- playback ----------
+  // Keep the screen awake while the song plays (long practice loops).
+  const acquireWakeLock = async () => {
+    try {
+      wakeLock.current = await (navigator as any).wakeLock?.request("screen");
+    } catch {
+      // unsupported or denied — the screen may sleep, playback still runs
+    }
+  };
+  const releaseWakeLock = () => {
+    try {
+      wakeLock.current?.release();
+    } catch {
+      // already released
+    }
+    wakeLock.current = null;
+  };
+
+  useEffect(() => {
+    const onVis = () => {
+      // the OS drops the lock when the tab hides — re-acquire on return
+      if (document.visibilityState === "visible" && playingRef.current) acquireWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
   const stop = () => {
     if (playTimer.current) clearTimeout(playTimer.current);
     playTimer.current = null;
     killBus(playBus.current);
     playBus.current = null;
     playingRef.current = false;
+    releaseWakeLock();
     setPlaying(false);
     setPlayPos(null);
   };
@@ -385,6 +426,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
 
     playingRef.current = true;
     setPlaying(true);
+    acquireWakeLock();
     let k = 0;
     let pass = 0;
     const tick = () => {
@@ -693,12 +735,47 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       )}
 
       <div className="key-row">
-        <button className="key-arrow" onClick={() => rotateKey(-1)} aria-label="Rotate key counterclockwise">←</button>
+        <button className="key-arrow" onClick={() => rotateKey(-1)} aria-label="Transpose down a fifth">←</button>
         <span className="key-pill">{FIFTHS[keyIdx].maj} major</span>
-        <button className="key-arrow" onClick={() => rotateKey(1)} aria-label="Rotate key clockwise">→</button>
+        <button className="key-arrow" onClick={() => rotateKey(1)} aria-label="Transpose up a fifth">→</button>
+        <button
+          className="key-arrow wheel-toggle"
+          onClick={() => {
+            setWheelCompact((c) => {
+              try {
+                localStorage.setItem("jsc-wheel", c ? "full" : "compact");
+              } catch {
+                // preference just won't persist
+              }
+              return !c;
+            });
+          }}
+          aria-label={wheelCompact ? "Show full wheel" : "Show compact chords"}
+          title={wheelCompact ? "Full wheel" : "Compact"}
+        >
+          {wheelCompact ? "◯" : "▂"}
+        </button>
       </div>
 
-      <div className="wheelbox">{renderWheel()}</div>
+      {wheelCompact ? (
+        <div className="compact-row">
+          {[
+            { idx: keyIdx, q: "maj" as const, roman: "I" },
+            { idx: (keyIdx + 11) % 12, q: "maj" as const, roman: "IV" },
+            { idx: (keyIdx + 1) % 12, q: "maj" as const, roman: "V" },
+            { idx: keyIdx, q: "min" as const, roman: "vi" },
+            { idx: (keyIdx + 11) % 12, q: "min" as const, roman: "ii" },
+            { idx: (keyIdx + 1) % 12, q: "min" as const, roman: "iii" },
+          ].map((d) => (
+            <button key={d.roman} className="compact-chord" onClick={() => tapChord(d.idx, d.q)}>
+              <span className="c-name">{chordLabel({ idx: d.idx, quality: d.q })}</span>
+              <span className="c-roman">{d.roman}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="wheelbox">{renderWheel()}</div>
+      )}
 
       <PartView
         doc={doc}

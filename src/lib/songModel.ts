@@ -241,6 +241,27 @@ export function withSlotCount(m: Measure, count: number): Measure {
   return { ...m, slots };
 }
 
+/** Shift every chord by `delta` circle-of-fifths positions (transpose). */
+export function transposeDoc(doc: SongDocV2, delta: number): SongDocV2 {
+  const shift = (c: Chord | null): Chord | null =>
+    c ? { ...c, idx: ((c.idx + delta) % 12 + 12) % 12 } : null;
+  return {
+    ...doc,
+    parts: Object.fromEntries(
+      Object.entries(doc.parts).map(([id, p]) => [
+        id,
+        {
+          ...p,
+          lines: p.lines.map((l) => ({
+            ...l,
+            measures: l.measures.map((m) => ({ ...m, slots: m.slots.map(shift) })),
+          })),
+        },
+      ])
+    ),
+  };
+}
+
 /** Delete a custom pattern and clear every reference to it. */
 export function removeCustomPattern(doc: SongDocV2, id: string): SongDocV2 {
   const patterns = Object.fromEntries(Object.entries(doc.patterns ?? {}).filter(([k]) => k !== id));

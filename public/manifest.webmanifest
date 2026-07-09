@@ -1,0 +1,15 @@
+{
+  "name": "Just Some Chords",
+  "short_name": "Chords",
+  "description": "Write songs on a circle of fifths — tap chords, build sections, save your songbook.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f2f1e9",
+  "theme_color": "#f2f1e9",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
