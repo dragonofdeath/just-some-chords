@@ -1,0 +1,47 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import SongEditor from "../../components/SongEditor";
+import { auth } from "@wix/essentials";
+import { items } from "@wix/data";
+
+// Public share page — no login gate. The song is loaded with an elevated read
+// gated by the unguessable shareId, then opened in the FULL editor as an
+// unsaved copy: anyone can play and rework it; saving forks it into the
+// visitor's own songbook (login happens at save). The original is untouchable
+// here — no _id or shareId is passed, so a save can only ever create a copy.
+const { shareId } = Astro.params;
+
+let song: any = null;
+if (shareId && /^[A-Za-z0-9-]{16,64}$/.test(shareId)) {
+  try {
+    const elevatedQuery = auth.elevate(items.query);
+    const res = await elevatedQuery("songs").eq("shareId", shareId).limit(1).find();
+    song = res.items[0] ?? null;
+  } catch {
+    song = null;
+  }
+}
+
+const initialSong = song
+  ? {
+      title: song.title ?? "Untitled",
+      songKey: song.songKey ?? "G",
+      bpm: song.bpm ?? 84,
+      timeSignature: song.timeSignature ?? "4/4",
+      sections: song.sections?.list ? song.sections : { list: [{ name: "Verse", chords: [] }] },
+    }
+  : null;
+---
+
+<Layout title={song ? `${song.title} — Just Some Chords` : "Shared song — Just Some Chords"}>
+  {initialSong ? (
+    <SongEditor client:only="react" songId="new" source="shared" initialSong={initialSong} />
+  ) : (
+    <main class="editor">
+      <div class="player-error">
+        <p>This song isn't shared (or the link was revoked).</p>
+        <a class="cta" href="/">Make your own songbook</a>
+      </div>
+    </main>
+  )}
+</Layout>

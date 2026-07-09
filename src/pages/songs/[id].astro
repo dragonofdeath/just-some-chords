@@ -1,0 +1,46 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { members } from "@wix/members";
+import { items } from "@wix/data";
+import SongEditor from "../../components/SongEditor";
+
+const { id } = Astro.params;
+
+// A NEW song is open to everyone — anonymous visitors get the full editor and
+// are sent to login when they save. Existing songs stay member-gated.
+let song: any = null;
+if (id !== "new") {
+  let me: any = null;
+  try {
+    const res = await members.getCurrentMember();
+    me = res.member ?? null;
+  } catch {
+    // anonymous — handled below
+  }
+  if (!me) return Astro.redirect(`/api/auth/login?returnUrl=/songs/${id}`);
+
+  try {
+    const res = await items.query("songs").eq("_id", id).limit(1).find();
+    song = res.items[0] ?? null;
+  } catch {
+    song = null;
+  }
+  if (!song) return Astro.redirect("/songs");
+}
+
+const initialSong = song
+  ? {
+      _id: song._id,
+      shareId: song.shareId ?? undefined,
+      title: song.title ?? "Untitled",
+      songKey: song.songKey ?? "G",
+      bpm: song.bpm ?? 84,
+      timeSignature: song.timeSignature ?? "4/4",
+      sections: song.sections?.list ? song.sections : { list: [{ name: "Verse", chords: [] }] },
+    }
+  : null;
+---
+
+<Layout title={`${song?.title ?? "New song"} — Just Some Chords`}>
+  <SongEditor client:only="react" songId={id!} initialSong={initialSong} />
+</Layout>

@@ -11,3 +11,8 @@ For documentation and support, check out:
 - [Wix Headless Documentation](https://dev.wix.com/docs/go-headless)
 - [Wix SDK Documentation](https://dev.wix.com/docs/sdk)
 - [Community on Discord](https://discord.gg/n6TBrSnYTp)
+## Audio samples
+
+Piano and acoustic-guitar samples in `public/samples/` are from
+[tonejs-instruments](https://github.com/nbrosowsky/tonejs-instruments)
+by N. Brosowsky, licensed CC-BY 3.0.

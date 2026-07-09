@@ -1,8 +1,51 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
+import Layout from "../layouts/Layout.astro";
+import { members } from "@wix/members";
+
+let me = null;
+try {
+  const res = await members.getCurrentMember();
+  me = res.member ?? null;
+} catch {
+  // anonymous visitor — normal state
+}
+if (me) return Astro.redirect("/songs");
 ---
 
-<Layout>
-	<Welcome />
+<Layout title="Just Some Chords — write songs on a circle of fifths">
+  <main class="shell landing">
+    <p class="brand">Just Some Chords</p>
+    <h1>Your songbook, one tap at a time.</h1>
+    <p class="lede">
+      Pick a key, tap chords on the wheel, hear them instantly, and arrange
+      verses and choruses. Your songs are saved to your account.
+    </p>
+
+    <svg class="wheel-motif" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Circle of fifths motif">
+      <circle cx="90" cy="90" r="82" fill="none" stroke="#d9d7c8" stroke-width="1.5"></circle>
+      <circle cx="90" cy="90" r="56" fill="none" stroke="#d9d7c8" stroke-width="1.5"></circle>
+      <circle cx="90" cy="90" r="26" fill="#38664f"></circle>
+      <text x="90" y="97" text-anchor="middle" fill="#fbfaf4" font-size="19" font-weight="700" font-family="Iowan Old Style, Palatino, Georgia, serif">G</text>
+      <g fill="#26433a" font-size="14" font-weight="700" font-family="Iowan Old Style, Palatino, Georgia, serif">
+        <text x="90" y="26" text-anchor="middle">G</text>
+        <text x="146" y="52" text-anchor="middle">D</text>
+        <text x="36" y="52" text-anchor="middle">C</text>
+      </g>
+      <g fill="#9aa095" font-size="12" font-family="Iowan Old Style, Palatino, Georgia, serif">
+        <text x="160" y="96" text-anchor="middle">A</text>
+        <text x="146" y="136" text-anchor="middle">E</text>
+        <text x="90" y="162" text-anchor="middle">B</text>
+        <text x="36" y="136" text-anchor="middle">B♭</text>
+        <text x="20" y="96" text-anchor="middle">F</text>
+      </g>
+    </svg>
+
+    <div>
+      <a class="cta" href="/songs/new">Start writing</a>
+    </div>
+    <p class="fine">
+      No account needed to write — you'll sign in when you save.<br />
+      Already have a songbook? <a class="fine-link" href="/api/auth/login?returnUrl=/songs">Log in</a>
+    </p>
+  </main>
 </Layout>

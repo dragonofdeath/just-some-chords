@@ -1,0 +1,84 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { members } from "@wix/members";
+import { items } from "@wix/data";
+
+let me: any = null;
+try {
+  const res = await members.getCurrentMember({ fieldsets: ["FULL"] });
+  me = res.member ?? null;
+} catch {
+  // anonymous — handled below
+}
+if (!me) return Astro.redirect("/api/auth/login?returnUrl=/songs");
+
+let songs: any[] = [];
+let loadError = false;
+try {
+  const res = await items.query("songs").descending("_updatedDate").limit(100).find();
+  songs = res.items;
+} catch {
+  loadError = true;
+}
+
+const who = me.profile?.nickname || me.loginEmail || "there";
+
+function sectionCount(s: any): string {
+  const n = s.sections?.list?.length ?? 0;
+  return n === 1 ? "1 section" : `${n} sections`;
+}
+function chordCount(s: any): number {
+  return (s.sections?.list ?? []).reduce((sum: number, sec: any) => sum + (sec.chords?.length ?? 0), 0);
+}
+---
+
+<Layout title="My songs — Just Some Chords">
+  <main class="shell">
+    <div class="list-head">
+      <h1>My songs</h1>
+    </div>
+    <div class="whoami">
+      <span>Signed in as {who}</span>
+      <form method="POST" action="/api/auth/logout?returnUrl=/">
+        <button class="logout-btn" type="submit">Log out</button>
+      </form>
+    </div>
+
+    {loadError && (
+      <p class="load-error">
+        Couldn't load your songs right now — pull to refresh or try again in a
+        moment.
+      </p>
+    )}
+
+    {!loadError && songs.length === 0 && (
+      <p class="empty-state">
+        Nothing in the songbook yet.<br />
+        Start your first song and it'll be saved here.
+      </p>
+    )}
+
+    {songs.length > 0 && (
+      <ul class="song-list">
+        {songs.map((s) => (
+          <li>
+            <a class="song-card" href={`/songs/${s._id}`}>
+              <span>
+                <span class="s-title">{s.title || "Untitled"}</span>
+                <br />
+                <span class="s-sub">
+                  {sectionCount(s)} · {chordCount(s)} chords · {s.bpm} BPM
+                </span>
+              </span>
+              <span class="s-key">{s.songKey} major</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+
+    <div class="new-song-row">
+      <a class="new-song" href="/songs/new">＋ New song</a>
+    </div>
+  </main>
+</Layout>
