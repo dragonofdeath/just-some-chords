@@ -22,18 +22,20 @@ import {
   type SongDocV2,
 } from "../lib/songModel";
 import {
+  EXTENSIONS,
   FIFTHS,
   TIME_SIGNATURES,
   bassMidi,
   chordLabel,
   chordSemis,
   chordToneSemis,
+  extLabel,
   isInKey,
   keyIdxFromName,
   type Chord,
 } from "../lib/theory";
 import PartView, { type Sel } from "./PartView";
-import EditMeasureSheet from "./sheets/EditMeasureSheet";
+import MeasureSettingsSheet from "./sheets/MeasureSettingsSheet";
 import SoundSheet from "./sheets/SoundSheet";
 import PatternEditorSheet from "./sheets/PatternEditorSheet";
 import { AddPartSheet, LineSheet, PartSheet } from "./sheets/PartSheet";
@@ -101,8 +103,6 @@ function wedgePath(cx: number, cy: number, r1: number, r2: number, a0: number, a
   return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r2} ${r2} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)} L${x2.toFixed(2)} ${y2.toFixed(2)} A${r1} ${r1} 0 0 0 ${x3.toFixed(2)} ${y3.toFixed(2)} Z`;
 }
 
-type EditTarget = { pos: Pos; slot: number };
-
 export default function SongEditor({ songId, initialSong, source = "member" }: Props) {
   const [song, setSong] = useState<SavedSong>(() => {
     if (songId === "new" && source !== "shared") {
@@ -127,7 +127,8 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   });
   const [active, setActive] = useState<{ ai: number; li: number }>({ ai: 0, li: 0 });
   const [sel, setSel] = useState<Sel | null>(null);
-  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [activeSlot, setActiveSlot] = useState(0);
+  const [measureSettingsOpen, setMeasureSettingsOpen] = useState(false);
   const [partSheet, setPartSheet] = useState<number | null>(null);
   const [lineSheet, setLineSheet] = useState<{ ai: number; li: number } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -189,7 +190,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       return { ...s, ...prev };
     });
     setSel(null);
-    setEditTarget(null);
+    setActiveSlot(0);
     setDirty(true);
     setHistVer((v) => v + 1);
   };
@@ -203,7 +204,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       return { ...s, ...next };
     });
     setSel(null);
-    setEditTarget(null);
+    setActiveSlot(0);
     setDirty(true);
     setHistVer((v) => v + 1);
   };
@@ -256,15 +257,17 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   }, [instrument, doc.playback?.bass]);
 
   // ---------- structural edits ----------
+  const selPos: Pos | null = sel && sel.a === sel.b ? { ai: sel.ai, li: sel.li, mi: sel.a } : null;
+
   const tapChord = (idx: number, quality: "maj" | "min") => {
     const chord: Chord = { idx, quality };
     playChordAt(chordSemis(chord), 0, 1.2, instrument);
-    if (editTarget) {
-      // sheet is open — replace the selected slot instead of appending
+    if (selPos) {
+      // a measure is selected — the wheel replaces its active slot
       editDoc((d) =>
-        mapMeasure(d, editTarget.pos, (m) => ({
+        mapMeasure(d, selPos, (m) => ({
           ...m,
-          slots: m.slots.map((s, i) => (i === editTarget.slot ? chord : s)),
+          slots: m.slots.map((s, i) => (i === Math.min(activeSlot, m.slots.length - 1) ? chord : s)),
         }))
       );
       return;
@@ -278,6 +281,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
 
   const tapMeasure = (ai: number, li: number, mi: number) => {
     setActive({ ai, li });
+    setActiveSlot(0);
     setSel((cur) => {
       if (!cur || cur.ai !== ai || cur.li !== li) return { ai, li, a: mi, b: mi };
       if (mi >= cur.a && mi <= cur.b) return null;
@@ -292,7 +296,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
 
   const clearTransient = () => {
     setSel(null);
-    setEditTarget(null);
+    setActiveSlot(0);
   };
 
   // ---------- playback ----------
@@ -522,12 +526,12 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
 
   // ---------- pattern save ----------
   const savePattern = (name: string, steps: string) => {
-    const forMeasure = patternOpen === "measure" && editTarget;
+    const measurePos = patternOpen === "measure" ? selPos : null;
     editDoc((d) => {
       const id = newPatternId(d);
       const withPat: SongDocV2 = { ...d, patterns: { ...(d.patterns ?? {}), [id]: { name, steps } } };
-      if (forMeasure) {
-        return mapMeasure(withPat, editTarget!.pos, (m) => ({ ...m, pat: id }));
+      if (measurePos) {
+        return mapMeasure(withPat, measurePos, (m) => ({ ...m, pat: id }));
       }
       return { ...withPat, playback: { ...(withPat.playback ?? {}), pattern: id } };
     });
@@ -593,9 +597,15 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     );
   };
 
-  const editMeasure = editTarget ? measureAt(doc, editTarget.pos) : null;
-  const selMeasure = sel && sel.a === sel.b ? measureAt(doc, { ai: sel.ai, li: sel.li, mi: sel.a }) : null;
+  const selMeasure = selPos ? measureAt(doc, selPos) : null;
+  const slotIdx = selMeasure ? Math.min(activeSlot, selMeasure.slots.length - 1) : 0;
+  const slotChord = selMeasure ? selMeasure.slots[slotIdx] : null;
   const countIn = doc.playback?.countIn === true;
+
+  const editSlot = (fn: (slots: (Chord | null)[]) => (Chord | null)[]) => {
+    if (!selPos) return;
+    editDoc((d) => mapMeasure(d, selPos, (m) => ({ ...m, slots: fn(m.slots) })));
+  };
 
   return (
     <div className="editor">
@@ -661,22 +671,87 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         onAdd={() => setAddOpen(true)}
       />
 
-      {sel && (
+      {sel && sel.b > sel.a && (
         <div className="sel-bar">
-          <span className="sel-info">
-            {sel.a === sel.b
-              ? `${selMeasure ? selMeasure.slots.map((s) => (s ? chordLabel(s) : "—")).join(" / ") : "measure"} — play starts here`
-              : `${sel.b - sel.a + 1} measures — play loops this range`}
-          </span>
-          {sel.a === sel.b && (
-            <button
-              className="sel-edit"
-              onClick={() => setEditTarget({ pos: { ai: sel.ai, li: sel.li, mi: sel.a }, slot: 0 })}
-            >
-              Edit measure
-            </button>
-          )}
+          <span className="sel-info">{sel.b - sel.a + 1} measures — play loops this range</span>
           <button className="sel-clear" onClick={() => setSel(null)} aria-label="Clear selection">✕</button>
+        </div>
+      )}
+
+      {selPos && selMeasure && (
+        <div className="edit-strip">
+          <div className="strip-row strip-scroll">
+            {selMeasure.slots.map((s, i) => (
+              <button
+                key={i}
+                className={`strip-slot ${i === slotIdx ? "strip-slot-active" : ""}`}
+                onClick={() => setActiveSlot(i)}
+              >
+                {s ? chordLabel(s) : "—"}
+              </button>
+            ))}
+            <span className="strip-div" />
+            {[1, 2, 3, 4].map((k) => (
+              <button
+                key={k}
+                className={`strip-mini ${selMeasure.slots.length === k ? "strip-mini-active" : ""}`}
+                onClick={() => {
+                  editSlot((slots) => withSlotCount({ slots }, k).slots);
+                  setActiveSlot((s) => Math.min(s, k - 1));
+                }}
+                aria-label={`${k} chords in this measure`}
+              >
+                {k}
+              </button>
+            ))}
+            <span className="strip-div" />
+            <button
+              className={`strip-mini ${!slotChord ? "strip-mini-active" : ""}`}
+              onClick={() =>
+                editSlot((slots) =>
+                  slots.map((s, i) =>
+                    i !== slotIdx
+                      ? s
+                      : s
+                        ? null
+                        : (slots.find((x) => x) ?? { idx: keyIdx, quality: "maj" as const })
+                  )
+                )
+              }
+              aria-label="Toggle rest"
+              title="Rest"
+            >
+              —
+            </button>
+            <button
+              className="strip-mini"
+              onClick={() => setMeasureSettingsOpen(true)}
+              aria-label="Measure settings"
+              title="Signature & rhythm"
+            >
+              ⚙
+            </button>
+            <button className="strip-mini strip-close" onClick={() => setSel(null)} aria-label="Done editing">✕</button>
+          </div>
+          <div className="strip-row strip-scroll">
+            {slotChord ? (
+              EXTENSIONS.map((ext) => (
+                <button
+                  key={ext || "triad"}
+                  className={`strip-pill ${(slotChord.ext ?? "") === ext ? "strip-pill-active" : ""}`}
+                  onClick={() => {
+                    const next: Chord = { ...slotChord, ext: ext || undefined };
+                    playChordAt(chordSemis(next), 0, 1.2, instrument);
+                    editSlot((slots) => slots.map((s, i) => (i === slotIdx ? next : s)));
+                  }}
+                >
+                  {extLabel(ext)}
+                </button>
+              ))
+            ) : (
+              <span className="strip-hint">Rest — tap the wheel to put a chord here</span>
+            )}
+          </div>
         </div>
       )}
 
@@ -730,51 +805,21 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         </div>
       </footer>
 
-      {editTarget && editMeasure && (
-        <EditMeasureSheet
+      {measureSettingsOpen && selPos && selMeasure && (
+        <MeasureSettingsSheet
           doc={doc}
-          pos={editTarget.pos}
-          slot={Math.min(editTarget.slot, editMeasure.slots.length - 1)}
-          measure={editMeasure}
-          keyIdx={keyIdx}
+          measure={selMeasure}
           songSig={song.timeSignature}
           songPattern={doc.playback?.pattern ?? "block"}
-          onSelectSlot={(slot) => setEditTarget({ ...editTarget, slot })}
-          onSlotCount={(count) => editDoc((d) => mapMeasure(d, editTarget.pos, (m) => withSlotCount(m, count)))}
-          onToggleRest={() =>
-            editDoc((d) =>
-              mapMeasure(d, editTarget.pos, (m) => ({
-                ...m,
-                slots: m.slots.map((s, i) =>
-                  i !== editTarget.slot
-                    ? s
-                    : s
-                      ? null
-                      : (m.slots.find((x) => x) ?? { idx: keyIdx, quality: "maj" as const })
-                ),
-              }))
-            )
-          }
-          onSetExt={(ext) => {
-            const chord = editMeasure.slots[editTarget.slot];
-            if (!chord) return;
-            const next: Chord = { ...chord, ext: ext || undefined };
-            playChordAt(chordSemis(next), 0, 1.2, instrument);
-            editDoc((d) =>
-              mapMeasure(d, editTarget.pos, (m) => ({
-                ...m,
-                slots: m.slots.map((s, i) => (i === editTarget.slot ? next : s)),
-              }))
-            );
-          }}
-          onSetSig={(sig) => editDoc((d) => mapMeasure(d, editTarget.pos, (m) => ({ ...m, sig: sig || undefined })))}
-          onSetPat={(pat) => editDoc((d) => mapMeasure(d, editTarget.pos, (m) => ({ ...m, pat: pat || undefined })))}
+          onSetSig={(sig) => editDoc((d) => mapMeasure(d, selPos, (m) => ({ ...m, sig: sig || undefined })))}
+          onSetPat={(pat) => editDoc((d) => mapMeasure(d, selPos, (m) => ({ ...m, pat: pat || undefined })))}
           onRemoveMeasure={() => {
-            editDoc((d) => mapMeasure(d, editTarget.pos, () => null));
+            editDoc((d) => mapMeasure(d, selPos, () => null));
+            setMeasureSettingsOpen(false);
             clearTransient();
           }}
           onNewPattern={() => setPatternOpen("measure")}
-          onClose={() => setEditTarget(null)}
+          onClose={() => setMeasureSettingsOpen(false)}
         />
       )}
 
