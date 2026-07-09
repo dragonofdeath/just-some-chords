@@ -118,7 +118,12 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     return initialSong ? normalize(initialSong) : newSong();
   });
   const [itemId, setItemId] = useState<string | null>(songId === "new" ? null : songId);
-  const [dirty, setDirty] = useState(songId === "new");
+  // A pristine new song isn't dirty — autosave must not create "Untitled"
+  // rows for people who merely open the editor. A shared copy counts as
+  // dirty so its Save button is immediately actionable (fork as-is).
+  const [dirty, setDirty] = useState(
+    source === "shared" ? true : songId === "new" && !!readDraft()
+  );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -151,6 +156,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const [patternsOpen, setPatternsOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [, setHistVer] = useState(0); // re-render undo/redo disabled state
@@ -167,6 +173,8 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const past = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
   const future = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
   const lastEdit = useRef<{ tag?: string; at: number }>({ at: 0 });
+  // Changes worth warning about on exit — everything except tempo tweaks.
+  const meaningfulDirty = useRef(false);
 
   const doc = song.sections;
   const keyIdx = keyIdxFromName(song.songKey);
@@ -191,6 +199,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       lastEdit.current = { tag, at: Date.now() };
       return fn(s);
     });
+    if (tag !== "bpm") meaningfulDirty.current = true;
     setDirty(true);
     setHistVer((v) => v + 1);
   };
@@ -209,6 +218,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     setSel(null);
     setActiveSlot(0);
     setPickingTo(false);
+    meaningfulDirty.current = true;
     setDirty(true);
     setHistVer((v) => v + 1);
   };
@@ -224,6 +234,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     setSel(null);
     setActiveSlot(0);
     setPickingTo(false);
+    meaningfulDirty.current = true;
     setDirty(true);
     setHistVer((v) => v + 1);
   };
@@ -244,11 +255,11 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   // ---------- lifecycle ----------
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirty) e.preventDefault();
+      if (meaningfulDirty.current) e.preventDefault();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [dirty]);
+  }, []);
 
   useEffect(() => () => stop(), []);
 
@@ -262,8 +273,24 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     } catch {
       // storage unavailable — nothing to clear
     }
-    save(d.song);
+    save(d.song, true);
   }, []);
+
+  // Auto-save: persist 1.5s after the last edit. A shared fork stays manual
+  // until the FIRST explicit save (so browsing someone's link doesn't silently
+  // copy it into your songbook); anonymous saves fall back to the local draft.
+  // needsLogin and the failure backoff keep this from retry-hammering the API.
+  const autoFail = useRef(0);
+  useEffect(() => {
+    if (!dirty || saving || needsLogin) return;
+    if (source === "shared" && !itemId) return;
+    if (Date.now() - autoFail.current < 15000) return;
+    const id = setTimeout(async () => {
+      const ok = await save(undefined, true);
+      if (!ok) autoFail.current = Date.now();
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [song, dirty, saving, needsLogin]);
 
   useEffect(() => {
     preload(instrument);
@@ -513,7 +540,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   };
 
   // ---------- save / share ----------
-  const save = async (override?: SavedSong) => {
+  const save = async (override?: SavedSong, silent = false) => {
     if (saving) return false;
     const src = override ?? song;
     setSaving(true);
@@ -533,6 +560,20 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
         body: JSON.stringify(payload),
       });
       if (res.status === 401 || res.status === 403) {
+        if (silent) {
+          // autosave must never yank the user to the login page — keep the
+          // work safe on-device and surface a hint instead
+          if (!itemId) {
+            try {
+              localStorage.setItem(DRAFT_KEY, JSON.stringify({ song: src }));
+              meaningfulDirty.current = false; // stashed locally — no unload nag
+            } catch {
+              // storage unavailable — beforeunload still guards
+            }
+          }
+          setNeedsLogin(true);
+          return false;
+        }
         if (!itemId) {
           try {
             localStorage.setItem(DRAFT_KEY, JSON.stringify({ song: src, pendingSave: true }));
@@ -540,6 +581,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
             // storage unavailable — login still proceeds, work may be lost
           }
         }
+        meaningfulDirty.current = false; // draft is stashed — don't double-prompt on the redirect
         window.location.href = `/api/auth/login?returnUrl=${encodeURIComponent(
           itemId ? window.location.pathname : "/songs/new"
         )}`;
@@ -558,10 +600,12 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           // stale draft is harmless
         }
       }
+      meaningfulDirty.current = false;
+      setNeedsLogin(false);
       setDirty(false);
       return true;
     } catch {
-      setSaveError("Couldn't save — check your connection and try again.");
+      if (!silent) setSaveError("Couldn't save — check your connection and try again.");
       return false;
     } finally {
       setSaving(false);
@@ -696,6 +740,8 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     );
   };
 
+  const backHref = source === "shared" && !itemId ? "/" : "/songs";
+
   const selMeasure = selPos ? measureAt(doc, selPos) : null;
   const slotIdx = selMeasure ? Math.min(activeSlot, selMeasure.slots.length - 1) : 0;
   const slotChord = selMeasure ? selMeasure.slots[slotIdx] : null;
@@ -711,7 +757,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       <header className="ed-head">
         <a
           className="back"
-          href={source === "shared" && !itemId ? "/" : "/songs"}
+          href={backHref}
           aria-label={source === "shared" && !itemId ? "Home" : "Back to my songs"}
         >‹</a>
         <input
@@ -736,6 +782,9 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
       {saveError && <p className="save-error">{saveError}</p>}
       {source === "shared" && !itemId && (
         <p className="shared-note">Shared song — play with it freely; saving adds a copy to your songbook.</p>
+      )}
+      {needsLogin && (
+        <p className="shared-note">Changes are kept on this device — tap Save to sign in and keep them in your songbook.</p>
       )}
 
       <div className="key-row">
