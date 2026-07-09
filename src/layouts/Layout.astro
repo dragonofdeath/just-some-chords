@@ -583,6 +583,10 @@ const { title = "Just Some Chords" } = Astro.props;
     align-items: flex-start;
     gap: 0;
     line-height: 1.12;
+    /* vertical swipes scroll the list; horizontal drags select a range */
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
   }
   .chip:active {
     transform: scale(0.96);
@@ -887,9 +891,9 @@ const { title = "Just Some Chords" } = Astro.props;
     background: var(--paper-raised);
     border: 1px solid var(--rule);
     border-radius: 999px;
-    width: 26px;
-    height: 26px;
-    font-size: 14px;
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
     line-height: 1;
     color: var(--ink);
     cursor: pointer;

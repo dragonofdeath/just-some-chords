@@ -279,14 +279,22 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     );
   };
 
+  // Tap always selects a single measure (tap the selected one to clear);
+  // ranges come only from dragging across measures.
   const tapMeasure = (ai: number, li: number, mi: number) => {
     setActive({ ai, li });
     setActiveSlot(0);
-    setSel((cur) => {
-      if (!cur || cur.ai !== ai || cur.li !== li) return { ai, li, a: mi, b: mi };
-      if (mi >= cur.a && mi <= cur.b) return null;
-      return { ai, li, a: Math.min(cur.a, mi), b: Math.max(cur.b, mi) };
-    });
+    setSel((cur) =>
+      cur && cur.ai === ai && cur.li === li && cur.a === mi && cur.b === mi
+        ? null
+        : { ai, li, a: mi, b: mi }
+    );
+  };
+
+  const dragRange = (ai: number, li: number, from: number, to: number) => {
+    setActive({ ai, li });
+    setActiveSlot(0);
+    setSel({ ai, li, a: Math.min(from, to), b: Math.max(from, to) });
   };
 
   const rotateKey = (dir: 1 | -1) => {
@@ -425,18 +433,30 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   }, [song.bpm, mixKey]);
 
   // ---------- BPM stepper (±1, hold to auto-repeat) ----------
+  // Click is the universal path (works on every device); pointer events only
+  // ADD hold-to-repeat where supported, with a timestamp guard so the click
+  // that follows a pointer tap doesn't double-bump.
+  const lastPointerBump = useRef(0);
   const bumpBpm = (delta: number) =>
     edit((s) => ({ ...s, bpm: Math.min(220, Math.max(40, s.bpm + delta)) }), "bpm");
   const bpmHoldStart = (delta: number) => {
+    lastPointerBump.current = Date.now();
     bumpBpm(delta);
     holdTimer.current.t = setTimeout(() => {
-      holdTimer.current.i = setInterval(() => bumpBpm(delta), 70);
+      holdTimer.current.i = setInterval(() => {
+        lastPointerBump.current = Date.now();
+        bumpBpm(delta);
+      }, 70);
     }, 450);
   };
   const bpmHoldEnd = () => {
     if (holdTimer.current.t) clearTimeout(holdTimer.current.t);
     if (holdTimer.current.i) clearInterval(holdTimer.current.i);
     holdTimer.current = {};
+  };
+  const bpmClick = (delta: number) => {
+    if (Date.now() - lastPointerBump.current < 600) return; // pointer already handled this tap
+    bumpBpm(delta);
   };
 
   // ---------- save / share ----------
@@ -659,6 +679,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           else rowRefs.current.delete(`${ai}:${li}`);
         }}
         onTapMeasure={tapMeasure}
+        onDragRange={dragRange}
         onTapLine={(ai, li) => setActive({ ai, li })}
         onOpenPart={(ai) => {
           setActive({ ai, li: 0 });
@@ -783,6 +804,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
               onPointerUp={bpmHoldEnd}
               onPointerLeave={bpmHoldEnd}
               onPointerCancel={bpmHoldEnd}
+              onClick={() => bpmClick(-1)}
               onContextMenu={(e) => e.preventDefault()}
               aria-label="Slower"
             >−</button>
@@ -793,6 +815,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
               onPointerUp={bpmHoldEnd}
               onPointerLeave={bpmHoldEnd}
               onPointerCancel={bpmHoldEnd}
+              onClick={() => bpmClick(1)}
               onContextMenu={(e) => e.preventDefault()}
               aria-label="Faster"
             >+</button>
