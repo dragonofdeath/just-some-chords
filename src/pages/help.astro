@@ -1,0 +1,16 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { Content as HelpContent } from "../content/help.md";
+---
+
+<Layout title="Help — Just Some Chords">
+  <main class="shell help-shell">
+    <div class="list-head">
+      <h1>Help</h1>
+      <a class="fine-link" href="/">← back</a>
+    </div>
+    <article class="help-prose">
+      <HelpContent />
+    </article>
+  </main>
+</Layout>

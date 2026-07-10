@@ -41,9 +41,12 @@ function measureCount(s: any): number {
     </div>
     <div class="whoami">
       <span>Signed in as {who}</span>
-      <form method="POST" action="/api/auth/logout?returnUrl=/">
-        <button class="logout-btn" type="submit">Log out</button>
-      </form>
+      <span class="whoami-links">
+        <a class="fine-link" href="/help">Help</a>
+        <form method="POST" action="/api/auth/logout?returnUrl=/">
+          <button class="logout-btn" type="submit">Log out</button>
+        </form>
+      </span>
     </div>
 
     {loadError && (
