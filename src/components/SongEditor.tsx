@@ -101,7 +101,18 @@ function SoundIcon({ size = 15 }: { size?: number }) {
 }
 
 function newSong(): SavedSong {
-  return { title: "Untitled", songKey: "G", bpm: 84, timeSignature: "4/4", sections: emptyDoc() };
+  const doc = emptyDoc();
+  // Bake the device's instrument preference into the song from the start so
+  // shares sound like what the author hears.
+  try {
+    const v = localStorage.getItem("jsc-instrument");
+    if (v === "piano" || v === "guitar" || v === "synth") {
+      doc.playback = { ...(doc.playback ?? {}), instrument: v };
+    }
+  } catch {
+    // private mode etc.
+  }
+  return { title: "Untitled", songKey: "G", bpm: 84, timeSignature: "4/4", sections: doc };
 }
 
 function normalize(raw: any): SavedSong {
@@ -161,7 +172,9 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   const [saveError, setSaveError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [playPos, setPlayPos] = useState<Pos | null>(null);
-  const [instrument, setInstrument] = useState<Instrument>(() => {
+  // Device-level instrument preference — the fallback for songs that don't
+  // carry one yet, and the default for brand-new songs.
+  const [deviceInst, setDeviceInst] = useState<Instrument>(() => {
     try {
       const v = localStorage.getItem("jsc-instrument");
       return v === "piano" || v === "guitar" || v === "synth" ? v : "piano";
@@ -220,6 +233,19 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   const keyIdx = keyIdxFromName(song.songKey);
   const mode: ModeId = doc.mode ?? "major";
   const keyLabel = `${FIFTHS[keyIdx].maj} ${MODES[mode].name}`;
+
+  // The chord instrument is part of the SONG (it must travel with shares);
+  // songs from before it was persisted fall back to the device preference.
+  const instrument: Instrument = (doc.playback?.instrument as Instrument) ?? deviceInst;
+  const setInstrument = (v: Instrument) => {
+    editDoc((d) => ({ ...d, playback: { ...(d.playback ?? {}), instrument: v } }), "instrument");
+    setDeviceInst(v);
+    try {
+      localStorage.setItem("jsc-instrument", v);
+    } catch {
+      // private mode etc. — preference just won't persist
+    }
+  };
 
   // ---------- history ----------
   const snapshot = (s: SavedSong) => ({
@@ -354,11 +380,6 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   useEffect(() => {
     preload(instrument);
     if (doc.playback?.bass) preload("bass");
-    try {
-      localStorage.setItem("jsc-instrument", instrument);
-    } catch {
-      // private mode etc. — preference just won't persist
-    }
   }, [instrument, doc.playback?.bass]);
 
   // ---------- structural edits ----------
@@ -641,12 +662,17 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
     const src = override ?? song;
     setSaving(true);
     setSaveError(null);
+    // Songs from before the instrument was persisted: stamp the effective
+    // one on save, so shares match what the author has been hearing.
+    const sections = src.sections.playback?.instrument
+      ? src.sections
+      : { ...src.sections, playback: { ...(src.sections.playback ?? {}), instrument } };
     const payload = {
       title: src.title.trim() || "Untitled",
       songKey: src.songKey,
       bpm: src.bpm,
       timeSignature: src.timeSignature,
-      sections: src.sections,
+      sections,
       shareId: src.shareId,
     };
     try {

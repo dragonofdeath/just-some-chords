@@ -100,7 +100,9 @@ next to Play:
   mute button. Muting silences a track without touching your pattern
   settings, so per-measure overrides survive.
 - **Chord instrument** — sampled Piano, sampled acoustic Guitar (strummed,
-  an octave down), or Synth.
+  an octave down), or Synth. The instrument is saved with the song, so a
+  shared link plays with the instrument you chose; your last choice is
+  also the default for your next new song.
 - **Rhythm pattern** — how chords are played: Block, Strum beats, Boom-chick,
   arpeggios, Waltz, Offbeat (skank — ska/reggae upstrokes), or **Off** (bass
   and drums only).

@@ -58,6 +58,9 @@ export interface Mute {
 
 export interface PlaybackConfig {
   pattern?: string; // chord-instrument pattern id, default "block"
+  // Chord instrument — part of the song so shares sound like the original;
+  // absent on older songs (they fall back to the device preference).
+  instrument?: string; // "piano" | "guitar" | "synth"
   bass?: boolean;
   bassPattern?: string; // "root5" | "root"
   drums?: string; // "off" | "click" | "rock" | "pop8" | "waltz" | "shuffle"
@@ -221,6 +224,7 @@ export function migrateSong(raw: any): SongDocV2 {
     if (raw.playback && typeof raw.playback === "object") {
       const pb: PlaybackConfig = {};
       if (typeof raw.playback.pattern === "string") pb.pattern = raw.playback.pattern;
+      if (["piano", "guitar", "synth"].includes(raw.playback.instrument)) pb.instrument = raw.playback.instrument;
       if (typeof raw.playback.bass === "boolean") pb.bass = raw.playback.bass;
       if (typeof raw.playback.bassPattern === "string") pb.bassPattern = raw.playback.bassPattern;
       if (typeof raw.playback.drums === "string") pb.drums = raw.playback.drums;
