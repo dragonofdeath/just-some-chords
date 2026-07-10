@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "wouter";
 import Sheet from "./sheets/Sheet";
+import { invalidatePlaylists } from "../lib/appCache";
 
 // Playlist manager — a small member-only island. Every mutation autosaves
 // (debounced) through the member-scoped playlist API, mirroring the song
@@ -21,6 +23,7 @@ interface Props {
 }
 
 export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
+  const [, navigate] = useLocation();
   const [title, setTitle] = useState(initial.title);
   const [ids, setIds] = useState<string[]>(initial.songIds);
   const [shareId, setShareId] = useState<string | undefined>(initial.shareId);
@@ -53,6 +56,7 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
         }),
       });
       if (!res.ok) throw new Error();
+      invalidatePlaylists();
       setDirty(false);
       return true;
     } catch {
@@ -123,7 +127,8 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
     }
     try {
       await fetch(`/api/playlists/${playlistId}`, { method: "DELETE" });
-      window.location.href = "/playlists";
+      invalidatePlaylists();
+      navigate("/playlists");
     } catch {
       setSaveError("Couldn't delete the playlist right now.");
     }
@@ -132,7 +137,7 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
   return (
     <div className="editor pl-editor">
       <header className="ed-head">
-        <a className="back" href="/playlists" aria-label="Back to playlists">‹</a>
+        <Link className="back" href="/playlists" aria-label="Back to playlists">‹</Link>
         <input
           className="title-input"
           value={title}
@@ -168,13 +173,13 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
           {rows.map((s, i) => (
             <li key={s._id}>
               <div className="song-card pl-row">
-                <a className="pl-song" href={`/songs/${s._id}`}>
+                <Link className="pl-song" href={`/songs/${s._id}`}>
                   <span className="s-title">{s.title}</span>
                   <br />
                   <span className="s-sub">
-                    {s.parts} · {s.measures} measures · {s.bpm} BPM · {s.songKey} major
+                    {s.parts} · {s.measures} measures · {s.bpm} BPM · {s.songKey}
                   </span>
-                </a>
+                </Link>
                 <span className="pl-actions">
                   <button className="pl-btn" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">↑</button>
                   <button className="pl-btn" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label="Move down">↓</button>

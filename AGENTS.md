@@ -14,6 +14,15 @@ autosave rules), so check whether your change invalidates any of them.
 
 ## Architecture map
 
+- **The member area is an SPA**: `src/components/App.tsx` (wouter router)
+  is mounted by dataless Astro shells `src/pages/songs/[...rest].astro` and
+  `playlists/[...rest].astro`. All list↔editor navigation is client-side —
+  the host's SSR baseline is ~1.4s/page and uncacheable, so NEVER reintroduce
+  server data-fetching pages for in-app navigation. Public share pages
+  (`/s/`, `/p/`), landing and `/help` stay SSR.
+- `src/lib/appCache.ts` — session in-memory cache (member via `/api/me`,
+  songs, playlists) + login redirect helper; invalidate on mutations
+- `src/components/SongList.tsx` / `PlaylistList.tsx` — list routes
 - `src/components/SongEditor.tsx` — the editor island (state, selection,
   playback scheduling, autosave, undo/redo, sheets orchestration)
 - `src/components/PartView.tsx` — arrangement list (parts/lines/measures,

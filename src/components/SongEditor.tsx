@@ -47,6 +47,7 @@ import {
   type ModeId,
 } from "../lib/theory";
 import PartView, { type Sel } from "./PartView";
+import { invalidateSongs } from "../lib/appCache";
 import MeasureSettingsSheet from "./sheets/MeasureSettingsSheet";
 import SoundSheet from "./sheets/SoundSheet";
 import PatternEditorSheet, { type PatternDraft } from "./sheets/PatternEditorSheet";
@@ -75,6 +76,9 @@ interface Props {
   // Where the ‹ button leads — a song opened from a shared playlist goes back
   // to that playlist instead of the default.
   backTo?: string;
+  // SPA mode: client-side back navigation (no full page load). When absent
+  // (share pages outside the router), the ‹ falls back to a plain link.
+  onBack?: () => void;
 }
 
 const DRAFT_KEY = "jsc-draft";
@@ -153,7 +157,7 @@ function wedgePath(cx: number, cy: number, r1: number, r2: number, a0: number, a
   return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r2} ${r2} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)} L${x2.toFixed(2)} ${y2.toFixed(2)} A${r1} ${r1} 0 0 0 ${x3.toFixed(2)} ${y3.toFixed(2)} Z`;
 }
 
-export default function SongEditor({ songId, initialSong, source = "member", backTo }: Props) {
+export default function SongEditor({ songId, initialSong, source = "member", backTo, onBack }: Props) {
   const [song, setSong] = useState<SavedSong>(() => {
     if (songId === "new" && source !== "shared") {
       const d = readDraft();
@@ -711,6 +715,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
       }
       if (!res.ok) throw new Error(`Save failed (${res.status})`);
       const saved = await res.json();
+      invalidateSongs(); // the list should reflect this on next visit
       if (!itemId && saved._id) {
         setItemId(saved._id);
         window.history.replaceState({}, "", `/songs/${saved._id}`);
@@ -906,11 +911,15 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   return (
     <div className="editor">
       <header className="ed-head">
-        <a
-          className="back"
-          href={backHref}
-          aria-label={source === "shared" && !itemId ? "Home" : "Back to my songs"}
-        >‹</a>
+        {onBack ? (
+          <button className="back" onClick={onBack} aria-label="Back to my songs">‹</button>
+        ) : (
+          <a
+            className="back"
+            href={backHref}
+            aria-label={source === "shared" && !itemId ? "Home" : "Back to my songs"}
+          >‹</a>
+        )}
         <input
           className="title-input"
           value={song.title}

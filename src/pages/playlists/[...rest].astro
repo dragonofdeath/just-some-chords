@@ -1,0 +1,10 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import App from "../../components/App";
+
+// SPA shell — see songs/[...rest].astro.
+---
+
+<Layout title="Just Some Chords">
+  <App client:only="react" />
+</Layout>

@@ -1,0 +1,12 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import App from "../../components/App";
+
+// SPA shell — no server data fetching here (the host's SSR baseline is paid
+// once per session; all in-app navigation is client-side). The island's
+// router reads the URL; auth is enforced by the /api routes + client gate.
+---
+
+<Layout title="Just Some Chords">
+  <App client:only="react" />
+</Layout>
