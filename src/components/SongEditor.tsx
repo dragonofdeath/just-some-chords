@@ -74,6 +74,22 @@ interface Props {
 
 const DRAFT_KEY = "jsc-draft";
 
+// Small speaker glyph — the app-wide "sound" icon (transport + measure strip).
+function SoundIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2 6v4h2.6L8 13V3L4.6 6H2z" fill="currentColor" />
+      <path
+        d="M10.3 5.7a3.1 3.1 0 010 4.6M12.2 3.9a5.7 5.7 0 010 8.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function newSong(): SavedSong {
   return { title: "Untitled", songKey: "G", bpm: 84, timeSignature: "4/4", sections: emptyDoc() };
 }
@@ -781,6 +797,24 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   const slotExt = slotChord?.ext ?? "";
   const extInStrip = (EXTENSIONS as readonly string[]).includes(slotExt);
 
+  const duplicateMeasure = () => {
+    if (!selPos || !selMeasure) return;
+    editDoc((d) =>
+      mapLine(d, selPos.ai, selPos.li, (l) => {
+        const copy = { ...selMeasure, slots: selMeasure.slots.map((c) => (c ? { ...c } : null)) };
+        const measures = [...l.measures];
+        measures.splice(selPos.mi + 1, 0, copy);
+        return { ...l, measures };
+      })
+    );
+  };
+
+  const removeMeasure = () => {
+    if (!selPos) return;
+    editDoc((d) => mapMeasure(d, selPos, () => null));
+    clearTransient();
+  };
+
   return (
     <div className="editor">
       <header className="ed-head">
@@ -981,11 +1015,29 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
             </button>
             <button
               className="strip-mini"
+              onClick={duplicateMeasure}
+              aria-label="Duplicate measure"
+              title="Duplicate measure"
+            >
+              ⧉
+            </button>
+            <button
+              className="strip-mini strip-danger"
+              onClick={removeMeasure}
+              aria-label="Remove measure"
+              title="Remove measure"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M3 4.5h10M6.5 4.2V2.8h3v1.4M4.7 4.5l.6 8.7h5.4l.6-8.7" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <button
+              className="strip-mini"
               onClick={() => setMeasureSettingsOpen(true)}
-              aria-label="Measure settings"
+              aria-label="Measure sound settings"
               title="Signature & rhythm"
             >
-              ⚙
+              <SoundIcon size={14} />
             </button>
             <button className="strip-mini strip-close" onClick={() => setSel(null)} aria-label="Done editing">✕</button>
           </div>
@@ -1035,8 +1087,8 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
         >
           <span className="countin-label">1·2</span>
         </button>
-        <button className="inst-btn" onClick={() => setSoundOpen(true)} aria-label="Sound settings">
-          Sound
+        <button className="inst-btn" onClick={() => setSoundOpen(true)} aria-label="Sound settings" title="Sound">
+          <SoundIcon size={17} />
         </button>
         <div className="t-meta">
           <button className="t-bpm-btn" onClick={() => setTempoOpen(true)} aria-label="Change tempo">
@@ -1071,11 +1123,6 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           songPattern={doc.playback?.pattern ?? "block"}
           onSetSig={(sig) => editDoc((d) => mapMeasure(d, selPos, (m) => ({ ...m, sig: sig || undefined })))}
           onSetPat={(pat) => editDoc((d) => mapMeasure(d, selPos, (m) => ({ ...m, pat: pat || undefined })))}
-          onRemoveMeasure={() => {
-            editDoc((d) => mapMeasure(d, selPos, () => null));
-            setMeasureSettingsOpen(false);
-            clearTransient();
-          }}
           onNewPattern={() => setPatternEditor({ target: "measure" })}
           onClose={() => setMeasureSettingsOpen(false)}
         />

@@ -56,8 +56,10 @@ In the strip:
   color these too — a minor chord with 7♭5 is your half-diminished (m7♭5),
   minor + 9 is m9, minor + maj7 is the James Bond chord. When a chord uses
   one of the catalog types, the … pill shows its name.
-- **⚙** opens measure settings: a per-measure **time signature** and a
-  per-measure **rhythm pattern** override, plus *Remove measure*.
+- **⧉ duplicates** the selected measure in place; the **trash button
+  removes** it.
+- The **speaker button** opens the measure's sound settings: a per-measure
+  **time signature** and a per-measure **rhythm pattern** override.
 
 ## Selecting ranges, looping, moving
 
@@ -84,7 +86,8 @@ In the strip:
 
 ## Sound
 
-Everything sound-related lives in the **Sound** sheet:
+Everything sound-related lives in the **Sound** sheet — the speaker button
+next to Play:
 
 - **Mixer** — volume sliders for chords, bass and drums, each with an **M**
   mute button. Muting silences a track without touching your pattern

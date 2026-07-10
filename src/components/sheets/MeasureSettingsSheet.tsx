@@ -10,7 +10,6 @@ interface Props {
   songPattern: string;
   onSetSig: (sig: string | undefined) => void;
   onSetPat: (pat: string | undefined) => void;
-  onRemoveMeasure: () => void;
   onNewPattern: () => void;
   onClose: () => void;
 }
@@ -22,7 +21,6 @@ export default function MeasureSettingsSheet({
   songPattern,
   onSetSig,
   onSetPat,
-  onRemoveMeasure,
   onNewPattern,
   onClose,
 }: Props) {
@@ -74,7 +72,7 @@ export default function MeasureSettingsSheet({
       </div>
 
       <div className="sheet-actions">
-        <button className="remove-chord" onClick={onRemoveMeasure}>Remove measure</button>
+        <span />
         <button className="sheet-done" onClick={onClose}>Done</button>
       </div>
     </Sheet>
