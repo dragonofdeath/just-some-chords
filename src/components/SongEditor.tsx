@@ -38,8 +38,12 @@ import {
   extLabel,
   isInKey,
   keyIdxFromName,
+  MODES,
+  modePalette,
   parseSig,
+  tonicChord,
   type Chord,
+  type ModeId,
 } from "../lib/theory";
 import PartView, { type Sel } from "./PartView";
 import MeasureSettingsSheet from "./sheets/MeasureSettingsSheet";
@@ -211,6 +215,8 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
 
   const doc = song.sections;
   const keyIdx = keyIdxFromName(song.songKey);
+  const mode: ModeId = doc.mode ?? "major";
+  const keyLabel = `${FIFTHS[keyIdx].maj} ${MODES[mode].name}`;
 
   // ---------- history ----------
   const snapshot = (s: SavedSong) => ({
@@ -338,8 +344,8 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   // ---------- structural edits ----------
   const selPos: Pos | null = sel && sel.a === sel.b ? { ai: sel.ai, li: sel.li, mi: sel.a } : null;
 
-  const tapChord = (idx: number, quality: "maj" | "min") => {
-    const chord: Chord = { idx, quality };
+  const tapChord = (idx: number, quality: "maj" | "min", ext?: string) => {
+    const chord: Chord = ext ? { idx, quality, ext } : { idx, quality };
     playChordAt(chordSemis(chord), 0, 1.2, instrument);
     // replace only when the selection is on the ACTIVE line — otherwise the
     // wheel appends to wherever "adding here" points
@@ -708,7 +714,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
     previewBus.current = bus;
     const { n, d } = parseSig(song.timeSignature);
     const beat = beatSeconds(song.timeSignature, song.bpm);
-    const chord: Chord = { idx: keyIdx, quality: "maj" };
+    const chord: Chord = tonicChord(keyIdx, mode);
     for (const ev of chordPatternEvents("__custom__", n, d, { name: draft.name, steps: draft.steps, res: draft.res })) {
       const rel = 0.05 + ev.t * beat;
       if (ev.kind === "block") {
@@ -732,7 +738,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
     const wedges: JSX.Element[] = [];
     for (let i = 0; i < 12; i++) {
       const rel = ((i - keyIdx) % 12 + 12) % 12;
-      const inKey = isInKey(i, keyIdx);
+      const inKey = isInKey(i, keyIdx, mode);
       const aMid = rel * 30;
       for (const ring of rings) {
         const label = ring.q === "min" ? FIFTHS[i].min : FIFTHS[i].maj;
@@ -774,7 +780,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
         {wedges}
         <circle cx={cx} cy={cy} r={48} className="hub" />
         <text x={cx} y={cy - 2} textAnchor="middle" className="hub-key">{FIFTHS[keyIdx].maj}</text>
-        <text x={cx} y={cy + 16} textAnchor="middle" className="hub-sub">MAJOR</text>
+        <text x={cx} y={cy + 16} textAnchor="middle" className="hub-sub">{MODES[mode].name.toUpperCase()}</text>
       </svg>
     );
   };
@@ -874,7 +880,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           onClick={() => { setKeyPick(null); setKeySheet(true); }}
           aria-label="Change key"
         >
-          {FIFTHS[keyIdx].maj} major <span className="key-caret">▾</span>
+          {keyLabel} <span className="key-caret">▾</span>
         </button>
         <button
           className="key-arrow wheel-toggle"
@@ -897,16 +903,13 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
 
       {wheelCompact ? (
         <div className="compact-row">
-          {[
-            { idx: keyIdx, q: "maj" as const, roman: "I" },
-            { idx: (keyIdx + 11) % 12, q: "maj" as const, roman: "IV" },
-            { idx: (keyIdx + 1) % 12, q: "maj" as const, roman: "V" },
-            { idx: keyIdx, q: "min" as const, roman: "vi" },
-            { idx: (keyIdx + 11) % 12, q: "min" as const, roman: "ii" },
-            { idx: (keyIdx + 1) % 12, q: "min" as const, roman: "iii" },
-          ].map((d) => (
-            <button key={d.roman} className="compact-chord" onClick={() => tapChord(d.idx, d.q)}>
-              <span className="c-name">{chordLabel({ idx: d.idx, quality: d.q })}</span>
+          {modePalette(keyIdx, mode).map((d) => (
+            <button
+              key={d.roman}
+              className="compact-chord"
+              onClick={() => tapChord(d.chord.idx, d.chord.quality, d.chord.ext)}
+            >
+              <span className="c-name">{chordLabel(d.chord)}</span>
               <span className="c-roman">{d.roman}</span>
             </button>
           ))}
@@ -918,6 +921,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
       <PartView
         doc={doc}
         keyIdx={keyIdx}
+        mode={mode}
         sel={sel}
         moveSel={moveSel}
         playPos={playPos}
@@ -995,7 +999,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
                       ? s
                       : s
                         ? null
-                        : (slots.find((x) => x) ?? { idx: keyIdx, quality: "maj" as const })
+                        : (slots.find((x) => x) ?? tonicChord(keyIdx, mode))
                   )
                 )
               }
@@ -1394,7 +1398,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
       {keySheet && (
         <Sheet
           title="Key"
-          sub={`${FIFTHS[keyIdx].maj} major`}
+          sub={keyLabel}
           label="Change key"
           onClose={() => { setKeySheet(false); setKeyPick(null); }}
         >
@@ -1424,18 +1428,41 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
                   </button>
                 ))}
               </div>
-              <p className="share-note">Keys follow the circle of fifths — neighbors share most of their chords.</p>
+              <p className="sheet-label">Mode</p>
+              <div className="ext-pills">
+                {(Object.keys(MODES) as ModeId[]).map((id) => (
+                  <button
+                    key={id}
+                    className={`ext-pill ${mode === id ? "ext-active" : ""}`}
+                    onClick={() =>
+                      editDoc((d) => {
+                        const next = { ...d };
+                        if (id === "major") delete next.mode;
+                        else next.mode = id;
+                        return next;
+                      }, "mode")
+                    }
+                  >
+                    {MODES[id].name}
+                  </button>
+                ))}
+              </div>
+              <p className="share-note">
+                Keys follow the circle of fifths — neighbors share most of
+                their chords. Switching mode keeps every chord as it is and
+                relabels the harmony around the new tonic.
+              </p>
             </>
           ) : (
             <>
               <p className="sheet-label">
-                {FIFTHS[keyIdx].maj} major → {FIFTHS[keyPick].maj} major
+                {FIFTHS[keyIdx].maj} {MODES[mode].name} → {FIFTHS[keyPick].maj} {MODES[mode].name}
               </p>
               <p className="share-note">
                 Transpose the chords along with the key? Every chord shifts so
                 the song keeps the same harmony, just higher or lower. If you
                 keep the chords, they stay on the same notes and only take new
-                roles in {FIFTHS[keyPick].maj} major.
+                roles in {FIFTHS[keyPick].maj} {MODES[mode].name}.
               </p>
               <div className="key-confirm">
                 <button className="sheet-done" onClick={() => applyKey(keyPick, true)}>

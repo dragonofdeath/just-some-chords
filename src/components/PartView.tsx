@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Measure, Pos, SongDocV2 } from "../lib/songModel";
 import { clampRepeat } from "../lib/songModel";
-import { chordLabel, chordRoman, type Chord } from "../lib/theory";
+import { chordLabel, chordRoman, type Chord, type ModeId } from "../lib/theory";
 
 export interface Sel {
   ai: number;
@@ -13,6 +13,7 @@ export interface Sel {
 interface Props {
   doc: SongDocV2;
   keyIdx: number;
+  mode: ModeId;
   sel: Sel | null;
   moveSel: Sel | null; // measures being moved; non-null = move mode
   playPos: Pos | null;
@@ -36,8 +37,8 @@ function measureTop(m: Measure): string {
   return m.slots.map(slotLabel).join(" / ");
 }
 
-function measureSub(m: Measure, keyIdx: number): string {
-  const romans = m.slots.map((s) => (s ? chordRoman(s, keyIdx) : "–")).join("/");
+function measureSub(m: Measure, keyIdx: number, mode: ModeId): string {
+  const romans = m.slots.map((s) => (s ? chordRoman(s, keyIdx, mode) : "–")).join("/");
   const extras = [m.sig, m.pat ? "♪" : null].filter(Boolean).join(" ");
   return extras ? `${romans} · ${extras}` : romans;
 }
@@ -48,6 +49,7 @@ const WIGGLE_PX = 10;
 export default function PartView({
   doc,
   keyIdx,
+  mode,
   sel,
   moveSel,
   playPos,
@@ -245,7 +247,7 @@ export default function PartView({
                             }}
                           >
                             <span className="c-name">{measureTop(m)}</span>
-                            <span className="c-roman">{measureSub(m, keyIdx)}</span>
+                            <span className="c-roman">{measureSub(m, keyIdx, mode)}</span>
                           </button>
                           {moveMode && dropMark(ai, li, mi + 1)}
                         </span>

@@ -3,6 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import { members } from "@wix/members";
 import { items } from "@wix/data";
 import { countMeasures, countSections, migrateSong } from "../../lib/songModel";
+import { MODES } from "../../lib/theory";
 
 let me: any = null;
 try {
@@ -31,6 +32,9 @@ function sectionCount(s: any): string {
 }
 function measureCount(s: any): number {
   return countMeasures(migrateSong(s.sections));
+}
+function keyLabel(s: any): string {
+  return `${s.songKey} ${MODES[migrateSong(s.sections).mode ?? "major"].name}`;
 }
 ---
 
@@ -76,7 +80,7 @@ function measureCount(s: any): number {
                   {sectionCount(s)} · {measureCount(s)} measures · {s.bpm} BPM
                 </span>
               </span>
-              <span class="s-key">{s.songKey} major</span>
+              <span class="s-key">{keyLabel(s)}</span>
             </a>
           </li>
         ))}

@@ -82,8 +82,105 @@ export function extLabel(ext: string): string {
 const QUALITY_AGNOSTIC = new Set(["dim", "aug", "5", "dim7", "sus2", "sus4", "7sus4", "7#5", "7#9"]);
 
 
-const ROMAN_MAJ: Record<number, string> = { 0: "I", 1: "V", 11: "IV" };
-const ROMAN_MIN: Record<number, string> = { 0: "vi", 1: "iii", 11: "ii" };
+// ---------- modes ----------
+// A mode borrows the seven notes of a parent major key; what changes is the
+// tonic and the roman numerals. `parentOff` is the circle-of-fifths step
+// from the tonic (named by its major-root FIFTHS entry) to that parent key.
+// Palette entries address the six non-diminished diatonic chords by their
+// position relative to the parent (rel: -1|0|+1 on the circle) and quality,
+// listed tonic-first in display order. Locrian's tonic is the parent's vii°
+// — a diminished chord outside those six — flagged with `tonicDim`.
+export type ModeId = "major" | "minor" | "dorian" | "phrygian" | "lydian" | "mixolydian" | "locrian";
+
+interface ModeEntry { rel: -1 | 0 | 1; q: ChordQuality; roman: string }
+export const MODES: Record<ModeId, { name: string; parentOff: number; palette: ModeEntry[]; tonicDim?: boolean }> = {
+  major: {
+    name: "major",
+    parentOff: 0,
+    palette: [
+      { rel: 0, q: "maj", roman: "I" }, { rel: -1, q: "maj", roman: "IV" }, { rel: 1, q: "maj", roman: "V" },
+      { rel: 0, q: "min", roman: "vi" }, { rel: -1, q: "min", roman: "ii" }, { rel: 1, q: "min", roman: "iii" },
+    ],
+  },
+  minor: {
+    name: "minor",
+    parentOff: -3,
+    palette: [
+      { rel: 0, q: "min", roman: "i" }, { rel: -1, q: "min", roman: "iv" }, { rel: 1, q: "min", roman: "v" },
+      { rel: 0, q: "maj", roman: "♭III" }, { rel: -1, q: "maj", roman: "♭VI" }, { rel: 1, q: "maj", roman: "♭VII" },
+    ],
+  },
+  dorian: {
+    name: "dorian",
+    parentOff: -2,
+    palette: [
+      { rel: -1, q: "min", roman: "i" }, { rel: 1, q: "maj", roman: "IV" }, { rel: 0, q: "min", roman: "v" },
+      { rel: -1, q: "maj", roman: "♭III" }, { rel: 0, q: "maj", roman: "♭VII" }, { rel: 1, q: "min", roman: "ii" },
+    ],
+  },
+  phrygian: {
+    name: "phrygian",
+    parentOff: -4,
+    palette: [
+      { rel: 1, q: "min", roman: "i" }, { rel: 0, q: "min", roman: "iv" }, { rel: -1, q: "maj", roman: "♭II" },
+      { rel: 1, q: "maj", roman: "♭III" }, { rel: 0, q: "maj", roman: "♭VI" }, { rel: -1, q: "min", roman: "♭vii" },
+    ],
+  },
+  lydian: {
+    name: "lydian",
+    parentOff: 1,
+    palette: [
+      { rel: -1, q: "maj", roman: "I" }, { rel: 1, q: "maj", roman: "II" }, { rel: 0, q: "maj", roman: "V" },
+      { rel: -1, q: "min", roman: "vi" }, { rel: 0, q: "min", roman: "iii" }, { rel: 1, q: "min", roman: "vii" },
+    ],
+  },
+  mixolydian: {
+    name: "mixolydian",
+    parentOff: -1,
+    palette: [
+      { rel: 1, q: "maj", roman: "I" }, { rel: 0, q: "maj", roman: "IV" }, { rel: -1, q: "min", roman: "v" },
+      { rel: -1, q: "maj", roman: "♭VII" }, { rel: 0, q: "min", roman: "ii" }, { rel: 1, q: "min", roman: "vi" },
+    ],
+  },
+  locrian: {
+    name: "locrian",
+    parentOff: -5,
+    tonicDim: true,
+    palette: [
+      { rel: 0, q: "maj", roman: "♭II" }, { rel: -1, q: "min", roman: "♭iii" }, { rel: 1, q: "min", roman: "iv" },
+      { rel: -1, q: "maj", roman: "♭V" }, { rel: 1, q: "maj", roman: "♭VI" }, { rel: 0, q: "min", roman: "♭vii" },
+    ],
+  },
+};
+
+export function sanitizeMode(raw: unknown): ModeId | undefined {
+  return typeof raw === "string" && raw !== "major" && raw in MODES ? (raw as ModeId) : undefined;
+}
+
+export function modeParent(keyIdx: number, mode: ModeId): number {
+  return ((keyIdx + MODES[mode].parentOff) % 12 + 12) % 12;
+}
+
+/** The mode's home chord — what previews and empty-song defaults play. */
+export function tonicChord(keyIdx: number, mode: ModeId): Chord {
+  const m = MODES[mode];
+  if (m.tonicDim) return { idx: keyIdx, quality: "maj", ext: "dim" };
+  const e = m.palette[0];
+  const p = modeParent(keyIdx, mode);
+  return { idx: ((p + e.rel) % 12 + 12) % 12, quality: e.q };
+}
+
+/** The compact palette: the mode's main chords with romans, tonic first. */
+export function modePalette(keyIdx: number, mode: ModeId): { chord: Chord; roman: string }[] {
+  const m = MODES[mode];
+  const p = modeParent(keyIdx, mode);
+  const list = m.palette.map((e) => ({
+    chord: { idx: ((p + e.rel) % 12 + 12) % 12, quality: e.q } as Chord,
+    roman: e.roman,
+  }));
+  if (m.tonicDim) list.unshift({ chord: tonicChord(keyIdx, mode), roman: "i°" });
+  return list;
+}
 
 export function chordLabel(c: Chord): string {
   const e = FIFTHS[c.idx];
@@ -153,9 +250,12 @@ export function chordSemis(c: Chord): number[] {
   return [pc - 12, pc, pc + third, pc + fifth, ...sh.extra.map((x) => pc + x)];
 }
 
-export function chordRoman(c: Chord, keyIdx: number): string {
-  const diff = ((c.idx - keyIdx) % 12 + 12) % 12;
-  return c.quality === "min" ? ROMAN_MIN[diff] ?? "·" : ROMAN_MAJ[diff] ?? "·";
+export function chordRoman(c: Chord, keyIdx: number, mode: ModeId = "major"): string {
+  const m = MODES[mode];
+  if (m.tonicDim && c.idx === keyIdx && c.quality === "maj" && c.ext === "dim") return "i°";
+  const rel0 = ((c.idx - modeParent(keyIdx, mode)) % 12 + 12) % 12;
+  const rel = rel0 === 11 ? -1 : rel0;
+  return m.palette.find((e) => e.rel === rel && e.q === c.quality)?.roman ?? "·";
 }
 
 export function chordPitchClass(c: Chord): number {
@@ -168,8 +268,8 @@ export function keyIdxFromName(name: string): number {
   return i === -1 ? 1 : i; // default G
 }
 
-export function isInKey(idx: number, keyIdx: number): boolean {
-  const rel = ((idx - keyIdx) % 12 + 12) % 12;
+export function isInKey(idx: number, keyIdx: number, mode: ModeId = "major"): boolean {
+  const rel = ((idx - modeParent(keyIdx, mode)) % 12 + 12) % 12;
   return rel === 0 || rel === 1 || rel === 11;
 }
 

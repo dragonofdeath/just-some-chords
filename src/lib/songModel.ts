@@ -1,7 +1,8 @@
 // v2 song document — stored whole inside the schemaless `sections` OBJECT
 // field of the `songs` collection. v1 docs ({list:[{name,repeat,chords}]})
 // are migrated on load; saves always write v2.
-import type { Chord } from "./theory";
+import type { Chord, ModeId } from "./theory";
+import { sanitizeMode } from "./theory";
 
 export interface Placement {
   part: string; // key into SongDocV2.parts — the SAME part may be placed many times
@@ -73,6 +74,7 @@ export interface SongDocV2 {
   patterns?: Record<string, CustomPattern>;
   playback?: PlaybackConfig;
   note?: string;
+  mode?: ModeId; // key mode; absent = major (songKey stays the tonic name)
 }
 
 export function cleanNote(v: unknown): string | undefined {
@@ -176,6 +178,8 @@ export function migrateSong(raw: any): SongDocV2 {
       });
     if (!Object.keys(parts).length || !arrangement.length) return emptyDoc();
     const doc: SongDocV2 = { v: 2, parts, arrangement };
+    const mode = sanitizeMode(raw.mode);
+    if (mode) doc.mode = mode;
     if (raw.patterns && typeof raw.patterns === "object") {
       const pats: Record<string, CustomPattern> = {};
       for (const [id, p] of Object.entries<any>(raw.patterns)) {

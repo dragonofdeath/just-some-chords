@@ -3,6 +3,7 @@ import Layout from "../../../layouts/Layout.astro";
 import { auth } from "@wix/essentials";
 import { items } from "@wix/data";
 import { countMeasures, countSections, migrateSong } from "../../../lib/songModel";
+import { MODES } from "../../../lib/theory";
 
 // Public playlist page — no login gate. The playlist and its songs are loaded
 // with elevated reads gated by the unguessable shareId. Songs open as unsaved
@@ -59,7 +60,7 @@ function meta(s: any): string {
                     <br />
                     <span class="s-sub">{meta(s)}</span>
                   </span>
-                  <span class="s-key">{s.songKey ?? "G"} major</span>
+                  <span class="s-key">{s.songKey ?? "G"} {MODES[migrateSong(s.sections).mode ?? "major"].name}</span>
                 </a>
               </li>
             ))}

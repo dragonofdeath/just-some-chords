@@ -6,7 +6,8 @@ but you can start writing without an account.
 
 ## Writing chords
 
-- **The chord row** shows the six chords of your key (I, IV, V, vi, ii, iii).
+- **The chord row** shows the main chords of your key — in major that's
+  I, IV, V, vi, ii, iii; other modes show their own set, tonic first.
   Tap one to hear it and add it to the active line — the part marked
   **"adding here"**.
 - **The full wheel**: tap the ◯ button next to the key to swap the compact row
@@ -19,6 +20,12 @@ but you can start writing without an account.
   stays identical, just higher or lower; *keep chords as they are* leaves
   the notes untouched and only changes which chords count as in-key. Use
   transpose to find a comfortable singing key at any point.
+- **Modes**: the same sheet picks the mode — major, minor, dorian,
+  phrygian, lydian, mixolydian or locrian. Switching mode never changes
+  your chords; it re-centers the harmony on a new tonic, so the chord row,
+  the roman numerals and the wheel highlight follow the mode. (A minor is
+  the aeolian mode.) In locrian the tonic is a diminished chord — the row
+  gains a seventh pill for it.
 
 ## Parts, lines and the arrangement
 
