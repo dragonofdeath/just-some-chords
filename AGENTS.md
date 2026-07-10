@@ -28,8 +28,13 @@ autosave rules), so check whether your change invalidates any of them.
 - `src/lib/patterns.ts` / `drums.ts` / `theory.ts` / `audio.ts` /
   `sampler.ts` — rhythm generators, drum synth, music theory, Web Audio,
   sample banks (`public/samples`, CC-BY tonejs-instruments)
-- `src/pages/api/*` — song CRUD (member session rides automatically) and the
-  elevated public share read
+- `src/components/PlaylistEditor.tsx` — playlist manager island (rename,
+  add/reorder/remove songs, share, delete)
+- `src/pages/api/*` — song + playlist CRUD (member session rides
+  automatically) and the elevated public share read
+- Playlists: `playlists` collection (title, `songIds.list`, shareId),
+  member-scoped like `songs`; public pages `/p/[shareId]` (list) and
+  `/p/[shareId]/[songId]` (editor fork) read elevated, gated by the shareId
 
 ## Working rules learned the hard way
 
@@ -40,5 +45,9 @@ autosave rules), so check whether your change invalidates any of them.
   runtime)
 - Autosave must never redirect anonymous users to login (silent mode + local
   draft stash)
-- The `songs` collection is member-scoped (`SITE_MEMBER_AUTHOR`); public
-  share access goes through `auth.elevate` in `/api/shared/[shareId]` only
+- The `songs` and `playlists` collections are member-scoped
+  (`SITE_MEMBER_AUTHOR`); public share access goes through `auth.elevate`
+  only in `/api/shared/[shareId]` and the `/p/[shareId]` pages
+- Playlist writes must filter `songIds` to the caller's own songs
+  (`ownedOnly` in `playlistFields.ts`) — the public playlist page reads
+  songs ELEVATED, so an unchecked id would publish someone else's song

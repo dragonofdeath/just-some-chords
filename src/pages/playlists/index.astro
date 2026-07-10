@@ -1,0 +1,98 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { members } from "@wix/members";
+import { items } from "@wix/data";
+
+let me: any = null;
+try {
+  const res = await members.getCurrentMember({ fieldsets: ["FULL"] });
+  me = res.member ?? null;
+} catch {
+  // anonymous — handled below
+}
+if (!me) return Astro.redirect("/api/auth/login?returnUrl=/playlists");
+
+let playlists: any[] = [];
+let loadError = false;
+try {
+  const res = await items.query("playlists").descending("_updatedDate").limit(100).find();
+  playlists = res.items;
+} catch {
+  loadError = true;
+}
+
+function songCount(p: any): string {
+  const n = Array.isArray(p.songIds?.list) ? p.songIds.list.length : 0;
+  return n === 1 ? "1 song" : `${n} songs`;
+}
+---
+
+<Layout title="My playlists — Just Some Chords">
+  <main class="shell">
+    <div class="list-head">
+      <h1>My playlists</h1>
+    </div>
+    <div class="whoami">
+      <span><a class="fine-link" href="/songs">‹ My songs</a></span>
+      <span class="whoami-links">
+        <a class="fine-link" href="/help">Help</a>
+      </span>
+    </div>
+
+    {loadError && (
+      <p class="load-error">
+        Couldn't load your playlists right now — pull to refresh or try again
+        in a moment.
+      </p>
+    )}
+
+    {!loadError && playlists.length === 0 && (
+      <p class="empty-state">
+        No playlists yet.<br />
+        Group songs into a set and share the whole thing with one link.
+      </p>
+    )}
+
+    {playlists.length > 0 && (
+      <ul class="song-list">
+        {playlists.map((p) => (
+          <li>
+            <a class="song-card" href={`/playlists/${p._id}`}>
+              <span>
+                <span class="s-title">{p.title || "Untitled playlist"}</span>
+                <br />
+                <span class="s-sub">{songCount(p)}{p.shareId ? " · shared" : ""}</span>
+              </span>
+              <span class="s-key">♫</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+
+    <div class="new-song-row">
+      <button class="new-song" id="new-playlist" type="button">＋ New playlist</button>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  document.getElementById("new-playlist")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "Creating…";
+    try {
+      const res = await fetch("/api/playlists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "New playlist", songIds: { list: [] } }),
+      });
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+      window.location.href = `/playlists/${created._id}`;
+    } catch {
+      btn.disabled = false;
+      btn.textContent = "＋ New playlist — try again";
+    }
+  });
+</script>

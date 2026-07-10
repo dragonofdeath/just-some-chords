@@ -1,0 +1,80 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import { auth } from "@wix/essentials";
+import { items } from "@wix/data";
+import { countMeasures, countSections, migrateSong } from "../../../lib/songModel";
+
+// Public playlist page — no login gate. The playlist and its songs are loaded
+// with elevated reads gated by the unguessable shareId. Songs open as unsaved
+// copies (same forking rules as single-song share links).
+const { shareId } = Astro.params;
+
+let playlist: any = null;
+let songs: any[] = [];
+if (shareId && /^[A-Za-z0-9-]{16,64}$/.test(shareId)) {
+  try {
+    // elevate() copies an SDK method — wrap items.query itself, not a closure.
+    const elevatedQuery = auth.elevate(items.query);
+    const res = await elevatedQuery("playlists").eq("shareId", shareId).limit(1).find();
+    playlist = res.items[0] ?? null;
+    const ids: string[] = Array.isArray(playlist?.songIds?.list) ? playlist.songIds.list : [];
+    if (ids.length) {
+      const sres = await elevatedQuery("songs").in("_id", ids).limit(200).find();
+      const byId = new Map(sres.items.map((s: any) => [s._id, s]));
+      songs = ids.map((sid) => byId.get(sid)).filter(Boolean);
+    }
+  } catch {
+    playlist = null;
+  }
+}
+
+function meta(s: any): string {
+  const doc = migrateSong(s.sections);
+  const n = countSections(doc);
+  return `${n === 1 ? "1 part" : `${n} parts`} · ${countMeasures(doc)} measures · ${s.bpm ?? 84} BPM`;
+}
+---
+
+<Layout title={playlist ? `${playlist.title || "Playlist"} — Just Some Chords` : "Shared playlist — Just Some Chords"}>
+  <main class="shell">
+    {playlist ? (
+      <>
+        <div class="list-head">
+          <h1>{playlist.title || "Untitled playlist"}</h1>
+        </div>
+        <p class="shared-note">
+          Shared playlist — open any song and play with it freely; saving adds
+          a copy to your own songbook.
+        </p>
+
+        {songs.length === 0 && <p class="empty-state">This playlist is empty.</p>}
+
+        {songs.length > 0 && (
+          <ul class="song-list">
+            {songs.map((s) => (
+              <li>
+                <a class="song-card" href={`/p/${shareId}/${s._id}`}>
+                  <span>
+                    <span class="s-title">{s.title || "Untitled"}</span>
+                    <br />
+                    <span class="s-sub">{meta(s)}</span>
+                  </span>
+                  <span class="s-key">{s.songKey ?? "G"} major</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div class="new-song-row">
+          <a class="new-song" href="/">Make your own songbook</a>
+        </div>
+      </>
+    ) : (
+      <div class="player-error">
+        <p>This playlist isn't shared (or the link was revoked).</p>
+        <a class="cta" href="/">Make your own songbook</a>
+      </div>
+    )}
+  </main>
+</Layout>

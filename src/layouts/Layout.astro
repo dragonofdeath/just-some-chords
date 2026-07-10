@@ -244,6 +244,79 @@ const { title = "Just Some Chords" } = Astro.props;
     font-size: 14px;
   }
 
+  /* ---------- playlists ---------- */
+  .pl-editor {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  .pl-list {
+    padding-top: 12px;
+  }
+  .pl-row {
+    padding: 10px 10px 10px 16px;
+  }
+  .pl-song {
+    flex: 1;
+    min-width: 0;
+    text-decoration: none;
+    color: var(--ink);
+  }
+  .pl-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px;
+  }
+  .pl-btn {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pl-btn:disabled {
+    opacity: 0.35;
+  }
+  .pl-remove {
+    color: #a04434;
+  }
+  .pl-pick {
+    width: 100%;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pl-add {
+    width: 100%;
+    border: 0;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pl-danger {
+    padding: 0 16px 34px;
+    text-align: center;
+  }
+  .pl-delete {
+    background: none;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 10px 18px;
+    color: #a04434;
+    font-size: 14px;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pl-danger .fine {
+    margin-top: 10px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
   /* ---------- help page ---------- */
   .whoami-links {
     display: flex;

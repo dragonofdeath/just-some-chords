@@ -66,6 +66,9 @@ interface Props {
   // "shared": opened from a public share link — an unsaved copy of someone's
   // song; saving forks it into the visitor's own songbook.
   source?: "member" | "shared";
+  // Where the ‹ button leads — a song opened from a shared playlist goes back
+  // to that playlist instead of the default.
+  backTo?: string;
 }
 
 const DRAFT_KEY = "jsc-draft";
@@ -112,7 +115,7 @@ function wedgePath(cx: number, cy: number, r1: number, r2: number, a0: number, a
   return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r2} ${r2} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)} L${x2.toFixed(2)} ${y2.toFixed(2)} A${r1} ${r1} 0 0 0 ${x3.toFixed(2)} ${y3.toFixed(2)} Z`;
 }
 
-export default function SongEditor({ songId, initialSong, source = "member" }: Props) {
+export default function SongEditor({ songId, initialSong, source = "member", backTo }: Props) {
   const [song, setSong] = useState<SavedSong>(() => {
     if (songId === "new" && source !== "shared") {
       const d = readDraft();
@@ -744,7 +747,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     );
   };
 
-  const backHref = source === "shared" && !itemId ? "/" : "/songs";
+  const backHref = backTo ?? (source === "shared" && !itemId ? "/" : "/songs");
 
   const selMeasure = selPos ? measureAt(doc, selPos) : null;
   const slotIdx = selMeasure ? Math.min(activeSlot, selMeasure.slots.length - 1) : 0;

@@ -115,6 +115,20 @@ Sound settings are part of the song, so they travel with sharing.
   never touched**; if they save, it lands in *their* songbook.
 - *Stop sharing* revokes the link immediately.
 
+## Playlists
+
+- **Playlists** (link at the top of *My songs*) group songs into a set — a
+  gig setlist, a practice batch, songs for the band.
+- In a playlist: **＋ Add songs** picks from your songbook, ↑ ↓ reorder,
+  ✕ removes (the song itself stays in your songbook — so does deleting the
+  whole playlist).
+- A song can be in any number of playlists. Changes to a song show up in
+  every playlist automatically — playlists just point at your songs.
+- **Share the whole playlist**: the share button creates one public link to
+  the full set. Visitors see the song list and can open and play each one —
+  same rules as single-song sharing: they get copies, your originals are
+  never touched. *Stop sharing* revokes the link immediately.
+
 ## Phone tips
 
 - **Add it like an app**: iPhone — Share → *Add to Home Screen*; desktop

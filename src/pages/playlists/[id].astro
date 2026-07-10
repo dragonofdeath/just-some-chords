@@ -1,0 +1,58 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { members } from "@wix/members";
+import { items } from "@wix/data";
+import PlaylistEditor from "../../components/PlaylistEditor";
+import { countMeasures, countSections, migrateSong } from "../../lib/songModel";
+
+const { id } = Astro.params;
+
+let me: any = null;
+try {
+  const res = await members.getCurrentMember();
+  me = res.member ?? null;
+} catch {
+  // anonymous — handled below
+}
+if (!me) return Astro.redirect(`/api/auth/login?returnUrl=/playlists/${id}`);
+
+let playlist: any = null;
+try {
+  const res = await items.query("playlists").eq("_id", id).limit(1).find();
+  playlist = res.items[0] ?? null;
+} catch {
+  playlist = null;
+}
+if (!playlist) return Astro.redirect("/playlists");
+
+let songs: any[] = [];
+try {
+  const res = await items.query("songs").descending("_updatedDate").limit(100).find();
+  songs = res.items;
+} catch {
+  songs = [];
+}
+
+const summaries = songs.map((s) => {
+  const doc = migrateSong(s.sections);
+  const n = countSections(doc);
+  return {
+    _id: s._id,
+    title: s.title || "Untitled",
+    songKey: s.songKey ?? "G",
+    bpm: s.bpm ?? 84,
+    parts: n === 1 ? "1 part" : `${n} parts`,
+    measures: countMeasures(doc),
+  };
+});
+
+const initial = {
+  title: playlist.title ?? "Untitled playlist",
+  songIds: Array.isArray(playlist.songIds?.list) ? playlist.songIds.list : [],
+  shareId: playlist.shareId ?? undefined,
+};
+---
+
+<Layout title={`${initial.title} — Just Some Chords`}>
+  <PlaylistEditor client:only="react" playlistId={id!} initial={initial} songs={summaries} />
+</Layout>
