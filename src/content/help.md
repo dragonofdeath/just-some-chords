@@ -50,7 +50,12 @@ In the strip:
 - **— (rest)** turns the selected slot into silence. Chords and bass go
   quiet; drums keep playing.
 - **Extensions** — the second row (7, maj7, 6, 9, add9, sus2, sus4, dim)
-  modifies the selected chord; each tap plays a preview.
+  modifies the selected chord; each tap plays a preview. The **…** pill at
+  the end opens the full catalog: power chords (5), aug, dim7, 7sus4, 6/9,
+  maj9, 11, 13 and the altered dominants (7♭5, 7♯5, 7♭9, 7♯9). Minor chords
+  color these too — a minor chord with 7♭5 is your half-diminished (m7♭5),
+  minor + 9 is m9, minor + maj7 is the James Bond chord. When a chord uses
+  one of the catalog types, the … pill shows its name.
 - **⚙** opens measure settings: a per-measure **time signature** and a
   per-measure **rhythm pattern** override, plus *Remove measure*.
 

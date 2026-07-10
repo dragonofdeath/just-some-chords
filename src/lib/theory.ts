@@ -48,12 +48,38 @@ export function barSeconds(sig: string | undefined, bpm: number): number {
   return n * beatSeconds(sig, bpm);
 }
 
-// Chord modifications. "" = plain triad.
+// Chord modifications. "" = plain triad. The quick strip shows EXTENSIONS;
+// the full catalog (jazz & friends) lives in EXTENSION_GROUPS behind "…".
 export const EXTENSIONS = ["", "7", "maj7", "6", "9", "add9", "sus2", "sus4", "dim"] as const;
 
+// Everything, grouped for the "more chords" sheet. Data stays ASCII
+// ("7b5"); extLabel prettifies for display. Minor quality composes for
+// free where it makes sense: min+"7b5" = m7♭5 (half-diminished),
+// min+"9" = m9, min+"maj7" = mMaj7.
+export const EXTENSION_GROUPS: { name: string; exts: string[] }[] = [
+  { name: "Triads & power", exts: ["", "dim", "aug", "5"] },
+  { name: "Sevenths", exts: ["7", "maj7", "dim7", "7sus4"] },
+  { name: "Sixths & ninths", exts: ["6", "6/9", "add9", "9", "maj9"] },
+  { name: "Extended", exts: ["11", "13"] },
+  { name: "Altered", exts: ["7b5", "7#5", "7b9", "7#9"] },
+  { name: "Suspended", exts: ["sus2", "sus4"] },
+];
+
+const PRETTY: Record<string, string> = {
+  "7b5": "7♭5",
+  "7#5": "7♯5",
+  "7b9": "7♭9",
+  "7#9": "7♯9",
+};
+
 export function extLabel(ext: string): string {
-  return ext === "" ? "triad" : ext;
+  if (ext === "") return "triad";
+  return PRETTY[ext] ?? ext;
 }
+
+// Extensions that define the whole chord shape — the maj/min quality is
+// ignored, so the label drops it (C5, Caug, Cdim7, C7sus4, C7♯9 …).
+const QUALITY_AGNOSTIC = new Set(["dim", "aug", "5", "dim7", "sus2", "sus4", "7sus4", "7#5", "7#9"]);
 
 
 const ROMAN_MAJ: Record<number, string> = { 0: "I", 1: "V", 11: "IV" };
@@ -65,58 +91,66 @@ export function chordLabel(c: Chord): string {
   const root = c.quality === "min" ? e.min.slice(0, -1) : e.maj;
   const ext = c.ext ?? "";
   if (!ext) return base;
-  if (ext === "dim") return root + "dim";
-  if (ext === "sus2" || ext === "sus4") return root + ext; // sus replaces the third
+  if (QUALITY_AGNOSTIC.has(ext)) return root + extLabel(ext); // C5, Caug, Cdim7, Csus4 …
   if (c.quality === "min" && ext === "maj7") return base + "(maj7)";
-  return base + ext; // G7, Gmaj7, Am7, G6, Gadd9, G9 …
+  return base + extLabel(ext); // G7, Am7, G6/9, G7♭9, Gm7♭5 …
 }
 
+// One shape per extension: overrides for the third/fifth slots plus extra
+// tones (semitones above the root). Third defaults to the maj/min quality.
+const SHAPES: Record<string, { third?: number; fifth?: number; extra: number[] }> = {
+  "7": { extra: [10] },
+  maj7: { extra: [11] },
+  "6": { extra: [9] },
+  "9": { extra: [10, 14] },
+  add9: { extra: [14] },
+  sus2: { third: 2, extra: [] },
+  sus4: { third: 5, extra: [] },
+  dim: { third: 3, fifth: 6, extra: [] },
+  aug: { third: 4, fifth: 8, extra: [] }, // major third by definition
+  dim7: { third: 3, fifth: 6, extra: [9] },
+  "7sus4": { third: 5, extra: [10] },
+  "6/9": { extra: [9, 14] },
+  maj9: { extra: [11, 14] },
+  "11": { extra: [10, 14, 17] },
+  "13": { extra: [10, 14, 21] },
+  "7b5": { fifth: 6, extra: [10] },
+  "7#5": { third: 4, fifth: 8, extra: [10] },
+  "7b9": { extra: [10, 13] },
+  "7#9": { third: 4, extra: [10, 15] },
+};
+
 // Chord tones as semitone offsets from C4: [root, third, fifth, top]
-// (top = extension tone when present, else the octave). Used by arpeggios.
+// (top = highest extension tone when present, else the octave). Arpeggios.
 export function chordToneSemis(c: Chord): number[] {
   const pc = chordPitchClass(c);
   const ext = c.ext ?? "";
-  let third = c.quality === "min" ? 3 : 4;
-  let fifth = 7;
-  let top: number | null = null;
-  switch (ext) {
-    case "7": top = 10; break;
-    case "maj7": top = 11; break;
-    case "6": top = 9; break;
-    case "9": top = 14; break;
-    case "add9": top = 14; break;
-    case "sus2": third = 2; break;
-    case "sus4": third = 5; break;
-    case "dim": third = 3; fifth = 6; break;
-  }
-  return [pc, pc + third, pc + fifth, pc + (top ?? 12)];
+  if (ext === "5") return [pc, pc + 7, pc + 12, pc + 19]; // power chord: no third
+  const sh = SHAPES[ext] ?? { extra: [] };
+  const third = sh.third ?? (c.quality === "min" ? 3 : 4);
+  const fifth = sh.fifth ?? 7;
+  const top = sh.extra.length ? sh.extra[sh.extra.length - 1] : 12;
+  return [pc, pc + third, pc + fifth, pc + top];
 }
 
-// Bass register: root voiced into E1..D#2 (midi 28–39); fifth sits above it.
+// Bass register: root voiced into E1..D#2 (midi 28–39); fifth sits above it
+// (honoring altered fifths — dim, aug, 7♭5 …).
 export function bassMidi(c: Chord, tone: 0 | 2): number {
   const pc = chordPitchClass(c);
   const root = 28 + ((pc - 4 + 12) % 12);
-  return tone === 2 ? root + 7 : root;
+  const fifth = SHAPES[c.ext ?? ""]?.fifth ?? 7;
+  return tone === 2 ? root + fifth : root;
 }
 
 // Semitone offsets from C4 for the full voicing (bass + chord tones).
 export function chordSemis(c: Chord): number[] {
   const pc = chordPitchClass(c);
   const ext = c.ext ?? "";
-  let third = c.quality === "min" ? 3 : 4;
-  let fifth = 7;
-  const extra: number[] = [];
-  switch (ext) {
-    case "7": extra.push(10); break;
-    case "maj7": extra.push(11); break;
-    case "6": extra.push(9); break;
-    case "9": extra.push(10, 14); break;
-    case "add9": extra.push(14); break;
-    case "sus2": third = 2; break;
-    case "sus4": third = 5; break;
-    case "dim": third = 3; fifth = 6; break;
-  }
-  return [pc - 12, pc, pc + third, pc + fifth, ...extra.map((x) => pc + x)];
+  if (ext === "5") return [pc - 12, pc, pc + 7, pc + 12]; // power chord: no third
+  const sh = SHAPES[ext] ?? { extra: [] };
+  const third = sh.third ?? (c.quality === "min" ? 3 : 4);
+  const fifth = sh.fifth ?? 7;
+  return [pc - 12, pc, pc + third, pc + fifth, ...sh.extra.map((x) => pc + x)];
 }
 
 export function chordRoman(c: Chord, keyIdx: number): string {

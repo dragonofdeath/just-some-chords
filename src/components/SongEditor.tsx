@@ -27,6 +27,7 @@ import {
 } from "../lib/songModel";
 import {
   EXTENSIONS,
+  EXTENSION_GROUPS,
   FIFTHS,
   TIME_SIGNATURES,
   bassMidi,
@@ -164,6 +165,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   const [patternsOpen, setPatternsOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);
   const [keySheet, setKeySheet] = useState(false);
+  const [extSheet, setExtSheet] = useState(false);
   const [keyPick, setKeyPick] = useState<number | null>(null); // pending target key idx
   const [tempoOpen, setTempoOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -768,6 +770,17 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
     editDoc((d) => mapMeasure(d, selPos, (m) => ({ ...m, slots: fn(m.slots) })));
   };
 
+  // Apply an extension to the selected slot's chord, with an audible preview.
+  const applyExt = (ext: string) => {
+    if (!slotChord) return;
+    const next: Chord = { ...slotChord, ext: ext || undefined };
+    playChordAt(chordSemis(next), 0, 1.2, instrument);
+    editSlot((slots) => slots.map((s, i) => (i === slotIdx ? next : s)));
+  };
+  // Is the current ext beyond the quick strip? Then "…" carries its label.
+  const slotExt = slotChord?.ext ?? "";
+  const extInStrip = (EXTENSIONS as readonly string[]).includes(slotExt);
+
   return (
     <div className="editor">
       <header className="ed-head">
@@ -980,19 +993,24 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
             {pickingTo ? (
               <span className="strip-hint">Now tap the last measure of the range — play will loop it</span>
             ) : slotChord ? (
-              EXTENSIONS.map((ext) => (
+              <>
+                {EXTENSIONS.map((ext) => (
+                  <button
+                    key={ext || "triad"}
+                    className={`strip-pill ${slotExt === ext ? "strip-pill-active" : ""}`}
+                    onClick={() => applyExt(ext)}
+                  >
+                    {extLabel(ext)}
+                  </button>
+                ))}
                 <button
-                  key={ext || "triad"}
-                  className={`strip-pill ${(slotChord.ext ?? "") === ext ? "strip-pill-active" : ""}`}
-                  onClick={() => {
-                    const next: Chord = { ...slotChord, ext: ext || undefined };
-                    playChordAt(chordSemis(next), 0, 1.2, instrument);
-                    editSlot((slots) => slots.map((s, i) => (i === slotIdx ? next : s)));
-                  }}
+                  className={`strip-pill ${!extInStrip ? "strip-pill-active" : ""}`}
+                  onClick={() => setExtSheet(true)}
+                  aria-label="More chord types"
                 >
-                  {extLabel(ext)}
+                  {extInStrip ? "…" : `${extLabel(slotExt)} …`}
                 </button>
-              ))
+              </>
             ) : (
               <span className="strip-hint">Rest — tap the wheel to put a chord here</span>
             )}
@@ -1290,6 +1308,40 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
       )}
 
       {tempoOpen && <TempoSheet bpm={song.bpm} onSet={setBpm} onClose={() => setTempoOpen(false)} />}
+
+      {extSheet && slotChord && (
+        <Sheet
+          title={chordLabel(slotChord)}
+          sub="chord type"
+          label="All chord types"
+          onClose={() => setExtSheet(false)}
+        >
+          {EXTENSION_GROUPS.map((g) => (
+            <div key={g.name}>
+              <p className="sheet-label">{g.name}</p>
+              <div className="ext-pills">
+                {g.exts.map((ext) => (
+                  <button
+                    key={ext || "triad"}
+                    className={`ext-pill ${slotExt === ext ? "ext-active" : ""}`}
+                    onClick={() => applyExt(ext)}
+                  >
+                    {extLabel(ext)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <p className="share-note">
+            Every tap plays a preview on the selected chord. Minor chords color
+            these too — try m7♭5 or m9.
+          </p>
+          <div className="sheet-actions">
+            <span />
+            <button className="sheet-done" onClick={() => setExtSheet(false)}>Done</button>
+          </div>
+        </Sheet>
+      )}
 
       {keySheet && (
         <Sheet
