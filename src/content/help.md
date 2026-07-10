@@ -120,7 +120,8 @@ Sound settings are part of the song, so they travel with sharing.
 - **Add it like an app**: iPhone — Share → *Add to Home Screen*; desktop
   Chrome/Edge — the install icon in the address bar. It opens standalone,
   without browser chrome.
-- **No sound on iPhone?** Check the ring/silent switch. iOS mutes Web-Audio
-  apps (like this one) when the phone is on silent, even though videos still
-  play sound. Flip the switch — and check you're not connected to a
-  forgotten Bluetooth speaker.
+- **Sound on iPhone**: the app plays through the media channel (like a music
+  app), so the ring/silent switch doesn't mute it — use the volume buttons.
+  If it ever goes quiet, check you're not connected to a forgotten Bluetooth
+  speaker, then tap anywhere in the app once (audio wakes on touch) or
+  reload the page.

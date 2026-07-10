@@ -6,12 +6,84 @@ export function ensureCtx(): AudioContext {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
   }
-  if (audioCtx.state === "suspended") audioCtx.resume();
+  // iOS also uses a non-standard "interrupted" state — resume on anything
+  // that isn't running.
+  if (audioCtx.state !== "running") audioCtx.resume();
   return audioCtx;
 }
 
 export function currentCtx(): AudioContext | null {
   return audioCtx;
+}
+
+// ---------- iOS audio-session plumbing ----------
+// Web Audio alone runs in iOS's "ambient" session: the silent switch mutes it
+// and interruptions (calls, route changes) can leave the context stuck. A
+// looping, silent HTML <audio> element promotes the page to the "playback"
+// session — the one videos use — so the app sounds like a music app should.
+
+function silentWavUrl(): string {
+  const rate = 8000;
+  const n = rate / 2; // half a second of silence
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const ws = (o: number, s: string) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i));
+  };
+  ws(0, "RIFF");
+  v.setUint32(4, 36 + n * 2, true);
+  ws(8, "WAVE");
+  ws(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  ws(36, "data");
+  v.setUint32(40, n * 2, true); // sample bytes are already zero
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+
+let unlockEl: HTMLAudioElement | null = null;
+let unlocked = false;
+
+function unlockAudio() {
+  const ctx = ensureCtx();
+  if (unlocked) return;
+  try {
+    // a one-sample buffer nudges Web Audio awake inside the gesture
+    const src = ctx.createBufferSource();
+    src.buffer = ctx.createBuffer(1, 1, 22050);
+    src.connect(ctx.destination);
+    src.start(0);
+    // the playback-session promotion
+    if (!unlockEl) {
+      unlockEl = new Audio(silentWavUrl());
+      unlockEl.loop = true;
+      (unlockEl as any).playsInline = true;
+    }
+    const p = unlockEl.play();
+    unlocked = true;
+    p?.catch(() => {
+      unlocked = false; // blocked — try again on the next gesture
+    });
+  } catch {
+    unlocked = false;
+  }
+}
+
+if (typeof document !== "undefined") {
+  // every gesture doubles as a resume watchdog; cheap no-op once running
+  ["touchend", "click", "keydown"].forEach((ev) =>
+    document.addEventListener(ev, unlockAudio, true)
+  );
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && audioCtx && audioCtx.state !== "running") {
+      audioCtx.resume();
+    }
+  });
 }
 
 function playSynthChordAt(semis: number[], t: number, dur: number, dest?: AudioNode, scale = 1) {
