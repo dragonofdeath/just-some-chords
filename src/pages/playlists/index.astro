@@ -3,23 +3,17 @@ import Layout from "../../layouts/Layout.astro";
 import { members } from "@wix/members";
 import { items } from "@wix/data";
 
-let me: any = null;
-try {
-  const res = await members.getCurrentMember({ fieldsets: ["FULL"] });
-  me = res.member ?? null;
-} catch {
-  // anonymous — handled below
-}
+// Independent calls — parallel (see songs/index.astro).
+const [meRes, plRes] = await Promise.allSettled([
+  members.getCurrentMember({ fieldsets: ["FULL"] }),
+  items.query("playlists").descending("_updatedDate").limit(100).find(),
+]);
+
+const me: any = meRes.status === "fulfilled" ? meRes.value.member ?? null : null;
 if (!me) return Astro.redirect("/api/auth/login?returnUrl=/playlists");
 
-let playlists: any[] = [];
-let loadError = false;
-try {
-  const res = await items.query("playlists").descending("_updatedDate").limit(100).find();
-  playlists = res.items;
-} catch {
-  loadError = true;
-}
+const playlists: any[] = plRes.status === "fulfilled" ? plRes.value.items : [];
+const loadError = plRes.status === "rejected";
 
 function songCount(p: any): string {
   const n = Array.isArray(p.songIds?.list) ? p.songIds.list.length : 0;

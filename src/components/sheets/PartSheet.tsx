@@ -2,14 +2,19 @@ import Sheet from "./Sheet";
 import type { SongDocV2 } from "../../lib/songModel";
 import { clampRepeat, partAt, placementCount } from "../../lib/songModel";
 import { SECTION_NAMES } from "../../lib/theory";
+import SoundOverrideRows from "./SoundOverrideRows";
 
 interface PartProps {
   doc: SongDocV2;
   ai: number;
+  songSig: string;
+  songPattern: string;
   onRename: (name: string) => void;
   onNote: (note: string) => void;
   onRepeat: (delta: number) => void;
   onMove: (dir: -1 | 1) => void;
+  onSetSig: (sig: string | undefined) => void;
+  onSetPat: (pat: string | undefined) => void;
   onAddLine: () => void;
   onAddPlacement: () => void; // place this same part again (reference)
   onDuplicateAsNew: () => void; // deep copy into an independent part
@@ -20,10 +25,14 @@ interface PartProps {
 export function PartSheet({
   doc,
   ai,
+  songSig,
+  songPattern,
   onRename,
   onNote,
   onRepeat,
   onMove,
+  onSetSig,
+  onSetPat,
   onAddLine,
   onAddPlacement,
   onDuplicateAsNew,
@@ -77,6 +86,17 @@ export function PartSheet({
         </div>
       </div>
 
+      <SoundOverrideRows
+        doc={doc}
+        sig={at.part.sig}
+        pat={at.part.pat}
+        inheritSig={songSig}
+        inheritPat={songPattern}
+        inheritLabel="song"
+        onSetSig={onSetSig}
+        onSetPat={onSetPat}
+      />
+
       <div className="part-actions">
         <button className="part-btn" disabled={ai === 0} onClick={() => onMove(-1)}>↑ Move up</button>
         <button className="part-btn" disabled={ai === doc.arrangement.length - 1} onClick={() => onMove(1)}>↓ Move down</button>
@@ -103,16 +123,35 @@ interface LineProps {
   doc: SongDocV2;
   ai: number;
   li: number;
+  songSig: string;
+  songPattern: string;
   onNote: (note: string) => void;
   onRepeat: (delta: number) => void;
   onMove: (dir: -1 | 1) => void;
+  onSetSig: (sig: string | undefined) => void;
+  onSetPat: (pat: string | undefined) => void;
   onDuplicate: () => void;
   onLoop: () => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
-export function LineSheet({ doc, ai, li, onNote, onRepeat, onMove, onDuplicate, onLoop, onDelete, onClose }: LineProps) {
+export function LineSheet({
+  doc,
+  ai,
+  li,
+  songSig,
+  songPattern,
+  onNote,
+  onRepeat,
+  onMove,
+  onSetSig,
+  onSetPat,
+  onDuplicate,
+  onLoop,
+  onDelete,
+  onClose,
+}: LineProps) {
   const at = partAt(doc, ai);
   const line = at?.part.lines[li];
   if (!at || !line) return null;
@@ -143,6 +182,16 @@ export function LineSheet({ doc, ai, li, onNote, onRepeat, onMove, onDuplicate, 
           <button className="bpm-btn" disabled={rep >= 16} onClick={() => onRepeat(1)} aria-label="More repeats">+</button>
         </div>
       </div>
+      <SoundOverrideRows
+        doc={doc}
+        sig={line.sig}
+        pat={line.pat}
+        inheritSig={at.part.sig ?? songSig}
+        inheritPat={at.part.pat ?? songPattern}
+        inheritLabel="inherit"
+        onSetSig={onSetSig}
+        onSetPat={onSetPat}
+      />
       <div className="part-actions">
         <button className="part-btn" disabled={line.measures.length === 0} onClick={onLoop}>⟳ Loop this line</button>
         <button className="part-btn" disabled={li === 0} onClick={() => onMove(-1)}>↑ Move up</button>

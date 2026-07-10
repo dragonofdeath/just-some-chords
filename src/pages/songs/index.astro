@@ -5,23 +5,18 @@ import { items } from "@wix/data";
 import { countMeasures, countSections, migrateSong } from "../../lib/songModel";
 import { MODES } from "../../lib/theory";
 
-let me: any = null;
-try {
-  const res = await members.getCurrentMember({ fieldsets: ["FULL"] });
-  me = res.member ?? null;
-} catch {
-  // anonymous — handled below
-}
+// Member lookup and the songs query are independent — run them in parallel;
+// the serial version doubled the page's API latency.
+const [meRes, songsRes] = await Promise.allSettled([
+  members.getCurrentMember({ fieldsets: ["FULL"] }),
+  items.query("songs").descending("_updatedDate").limit(100).find(),
+]);
+
+const me: any = meRes.status === "fulfilled" ? meRes.value.member ?? null : null;
 if (!me) return Astro.redirect("/api/auth/login?returnUrl=/songs");
 
-let songs: any[] = [];
-let loadError = false;
-try {
-  const res = await items.query("songs").descending("_updatedDate").limit(100).find();
-  songs = res.items;
-} catch {
-  loadError = true;
-}
+const songs: any[] = songsRes.status === "fulfilled" ? songsRes.value.items : [];
+const loadError = songsRes.status === "rejected";
 
 const who = me.profile?.nickname || me.loginEmail || "there";
 

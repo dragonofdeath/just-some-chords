@@ -13,6 +13,9 @@ export interface Line {
   measures: Measure[];
   repeat?: number; // 1–16, repeats inside the section
   note?: string; // free-text annotation ("palm mute", lyrics cue, …)
+  // Sound overrides — resolution order: measure ?? line ?? part ?? song.
+  sig?: string;
+  pat?: string;
 }
 
 export interface Measure {
@@ -28,6 +31,9 @@ export interface Part {
   name: string;
   lines: Line[];
   note?: string;
+  // Sound overrides — see Line.
+  sig?: string;
+  pat?: string;
 }
 
 export interface CustomPattern {
@@ -163,11 +169,15 @@ export function migrateSong(raw: any): SongDocV2 {
           if (l?.repeat && clampRepeat(l.repeat) > 1) line.repeat = clampRepeat(l.repeat);
           const note = cleanNote(l?.note);
           if (note) line.note = note;
+          if (typeof l?.sig === "string" && l.sig) line.sig = l.sig;
+          if (typeof l?.pat === "string" && l.pat) line.pat = l.pat;
           return line;
         });
       parts[id] = { name: typeof p.name === "string" ? p.name : "Part", lines: lines.length ? lines : [{ measures: [] }] };
       const pnote = cleanNote(p.note);
       if (pnote) parts[id].note = pnote;
+      if (typeof p.sig === "string" && p.sig) parts[id].sig = p.sig;
+      if (typeof p.pat === "string" && p.pat) parts[id].pat = p.pat;
     }
     const arrangement = raw.arrangement
       .filter((pl: any) => pl && parts[pl.part])
@@ -376,8 +386,10 @@ export function removeCustomPattern(doc: SongDocV2, id: string): SongDocV2 {
       pid,
       {
         ...p,
+        pat: p.pat === id ? undefined : p.pat,
         lines: p.lines.map((l) => ({
           ...l,
+          pat: l.pat === id ? undefined : l.pat,
           measures: l.measures.map((m) => (m.pat === id ? { ...m, pat: undefined } : m)),
         })),
       },

@@ -41,6 +41,10 @@ export interface TimelineOpts {
 interface FlatMeasure {
   pos: Pos;
   measure: Measure;
+  // sound settings resolved down the hierarchy: measure ?? line ?? part
+  // (song-level defaults apply later)
+  sig?: string;
+  pat?: string;
 }
 
 function flatten(doc: SongDocV2): FlatMeasure[] {
@@ -51,7 +55,14 @@ function flatten(doc: SongDocV2): FlatMeasure[] {
     for (let r = 0; r < clampRepeat(pl.repeat); r++) {
       part.lines.forEach((line, li) => {
         for (let lr = 0; lr < clampRepeat(line.repeat); lr++) {
-          line.measures.forEach((m, mi) => out.push({ pos: { ai, li, mi }, measure: m }));
+          line.measures.forEach((m, mi) =>
+            out.push({
+              pos: { ai, li, mi },
+              measure: m,
+              sig: m.sig ?? line.sig ?? part.sig,
+              pat: m.pat ?? line.pat ?? part.pat,
+            })
+          );
         }
       });
     }
@@ -63,10 +74,14 @@ export function buildTimeline(doc: SongDocV2, opts: TimelineOpts): Timeline {
   let flat: FlatMeasure[];
   if (opts.loop) {
     const { ai, li, a, b } = opts.loop;
-    const line = doc.parts[doc.arrangement[ai]?.part]?.lines[li];
-    flat = (line?.measures ?? [])
-      .slice(a, b + 1)
-      .map((measure, i) => ({ pos: { ai, li, mi: a + i }, measure }));
+    const part = doc.parts[doc.arrangement[ai]?.part];
+    const line = part?.lines[li];
+    flat = (line?.measures ?? []).slice(a, b + 1).map((measure, i) => ({
+      pos: { ai, li, mi: a + i },
+      measure,
+      sig: measure.sig ?? line?.sig ?? part?.sig,
+      pat: measure.pat ?? line?.pat ?? part?.pat,
+    }));
   } else {
     flat = flatten(doc);
     if (opts.startPos) {
@@ -82,7 +97,7 @@ export function buildTimeline(doc: SongDocV2, opts: TimelineOpts): Timeline {
   // count-in: one bar of clicks in the first measure's signature
   let musicStart = 0;
   if (opts.countIn && flat.length) {
-    const sig = flat[0].measure.sig ?? opts.sig;
+    const sig = flat[0].sig ?? opts.sig;
     const { n, d } = parseSig(sig);
     const beat = beatSeconds(sig, opts.bpm);
     const compound = d === 8 && n % 3 === 0;
@@ -104,8 +119,8 @@ export function buildTimeline(doc: SongDocV2, opts: TimelineOpts): Timeline {
   const drums = playback.drums ?? "off";
 
   let at = musicStart;
-  for (const { pos, measure } of flat) {
-    const sig = measure.sig ?? opts.sig;
+  for (const { pos, measure, sig: mSig, pat: mPat } of flat) {
+    const sig = mSig ?? opts.sig;
     const { n, d } = parseSig(sig);
     const beat = beatSeconds(sig, opts.bpm);
     const barSec = n * beat;
@@ -143,7 +158,7 @@ export function buildTimeline(doc: SongDocV2, opts: TimelineOpts): Timeline {
       }
     };
 
-    const patId = measure.pat ?? songPattern;
+    const patId = mPat ?? songPattern;
     for (const ev of chordPatternEvents(patId, n, d, doc.patterns?.[patId])) {
       emit(ev.t, ev.dur, (chord, t, dur, first) => {
         events.push({

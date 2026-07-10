@@ -1110,7 +1110,12 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
       {splitOpen && selPos && selMeasure && (
         <SplitSheet
           measure={selMeasure}
-          sig={selMeasure.sig ?? song.timeSignature}
+          sig={
+            selMeasure.sig ??
+            partAt(doc, selPos.ai)?.part.lines[selPos.li]?.sig ??
+            partAt(doc, selPos.ai)?.part.sig ??
+            song.timeSignature
+          }
           onApply={(div) => {
             editDoc((d) => mapMeasure(d, selPos, (m) => withDiv(m, div)));
             setActiveSlot(0);
@@ -1124,8 +1129,17 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
         <MeasureSettingsSheet
           doc={doc}
           measure={selMeasure}
-          songSig={song.timeSignature}
-          songPattern={doc.playback?.pattern ?? "block"}
+          inheritSig={
+            partAt(doc, selPos.ai)?.part.lines[selPos.li]?.sig ??
+            partAt(doc, selPos.ai)?.part.sig ??
+            song.timeSignature
+          }
+          inheritPat={
+            partAt(doc, selPos.ai)?.part.lines[selPos.li]?.pat ??
+            partAt(doc, selPos.ai)?.part.pat ??
+            doc.playback?.pattern ??
+            "block"
+          }
           onSetSig={(sig) => editDoc((d) => mapMeasure(d, selPos, (m) => ({ ...m, sig: sig || undefined })))}
           onSetPat={(pat) => editDoc((d) => mapMeasure(d, selPos, (m) => ({ ...m, pat: pat || undefined })))}
           onNewPattern={() => setPatternEditor({ target: "measure" })}
@@ -1137,6 +1151,10 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
         <PartSheet
           doc={doc}
           ai={partSheet}
+          songSig={song.timeSignature}
+          songPattern={doc.playback?.pattern ?? "block"}
+          onSetSig={(sig) => editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, sig: sig || undefined })))}
+          onSetPat={(pat) => editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, pat: pat || undefined })))}
           onRename={(name) => editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, name })), "rename")}
           onNote={(note) =>
             editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, note: note.trim() ? note : undefined })), "note-part")
@@ -1206,6 +1224,14 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           doc={doc}
           ai={lineSheet.ai}
           li={lineSheet.li}
+          songSig={song.timeSignature}
+          songPattern={doc.playback?.pattern ?? "block"}
+          onSetSig={(sig) =>
+            editDoc((d) => mapLine(d, lineSheet.ai, lineSheet.li, (l) => ({ ...l, sig: sig || undefined })))
+          }
+          onSetPat={(pat) =>
+            editDoc((d) => mapLine(d, lineSheet.ai, lineSheet.li, (l) => ({ ...l, pat: pat || undefined })))
+          }
           onNote={(note) =>
             editDoc(
               (d) => mapLine(d, lineSheet.ai, lineSheet.li, (l) => ({ ...l, note: note.trim() ? note : undefined })),

@@ -65,8 +65,8 @@ In the strip:
   one of the catalog types, the … pill shows its name.
 - **⧉ duplicates** the selected measure in place; the **trash button
   removes** it.
-- The **speaker button** opens the measure's sound settings: a per-measure
-  **time signature** and a per-measure **rhythm pattern** override.
+- The **guitar button** opens the measure's sound settings: a **time
+  signature** and a **rhythm pattern** override for just this measure.
 
 ## Selecting ranges, looping, moving
 
@@ -103,7 +103,13 @@ next to Play:
   an octave down), or Synth.
 - **Rhythm pattern** — how chords are played: Block, Strum beats, Boom-chick,
   arpeggios, Waltz, Offbeat (skank — ska/reggae upstrokes), or **Off** (bass
-  and drums only). Any measure can override the song pattern.
+  and drums only).
+- **Sound is hierarchical**: the song sets the default; a **part** (its ⋯
+  sheet), a **line** (its ⋯ sheet) and a single **measure** (guitar button
+  in the edit strip) can each override the time signature and the rhythm.
+  The most specific setting wins — measure beats line beats part beats
+  song — and the *inherit* pill clears an override, showing what it falls
+  back to. Overriding a shared part changes every placement of it.
 - **Custom patterns** — *＋ New…* opens a step grid over one bar: cycle each
   cell through chord / accented chord / arpeggio note / root / **hold** (a
   hold sustains the previous hit — that's how you write half and whole

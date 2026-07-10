@@ -10,21 +10,14 @@ const { id } = Astro.params;
 // are sent to login when they save. Existing songs stay member-gated.
 let song: any = null;
 if (id !== "new") {
-  let me: any = null;
-  try {
-    const res = await members.getCurrentMember();
-    me = res.member ?? null;
-  } catch {
-    // anonymous — handled below
-  }
+  // Independent calls — parallel (see songs/index.astro).
+  const [meRes, songRes] = await Promise.allSettled([
+    members.getCurrentMember(),
+    items.query("songs").eq("_id", id).limit(1).find(),
+  ]);
+  const me: any = meRes.status === "fulfilled" ? meRes.value.member ?? null : null;
   if (!me) return Astro.redirect(`/api/auth/login?returnUrl=/songs/${id}`);
-
-  try {
-    const res = await items.query("songs").eq("_id", id).limit(1).find();
-    song = res.items[0] ?? null;
-  } catch {
-    song = null;
-  }
+  song = songRes.status === "fulfilled" ? songRes.value.items[0] ?? null : null;
   if (!song) return Astro.redirect("/songs");
 }
 
