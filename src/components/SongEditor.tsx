@@ -74,16 +74,21 @@ interface Props {
 
 const DRAFT_KEY = "jsc-draft";
 
-// Small speaker glyph — the app-wide "sound" icon (transport + measure strip).
+// Small guitar glyph — the app-wide "sound" icon (transport + measure strip).
+// Filled figure-8 body (nonzero winding knocks out the soundhole), diagonal
+// neck with a headstock bar.
 function SoundIcon({ size = 15 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M2 6v4h2.6L8 13V3L4.6 6H2z" fill="currentColor" />
       <path
-        d="M10.3 5.7a3.1 3.1 0 010 4.6M12.2 3.9a5.7 5.7 0 010 8.2"
+        d="M8.6 10.8A3.4 3.4 0 1 0 1.8 10.8A3.4 3.4 0 1 0 8.6 10.8ZM10.4 8A2.4 2.4 0 1 0 5.6 8A2.4 2.4 0 1 0 10.4 8ZM7.5 9.6A1.1 1.1 0 1 1 5.3 9.6A1.1 1.1 0 1 1 7.5 9.6Z"
+        fill="currentColor"
+      />
+      <path
+        d="M9.4 6.6L13.4 2.6M13 1.4l1.9 1.9"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.3"
+        strokeWidth="1.6"
         strokeLinecap="round"
       />
     </svg>
@@ -1090,16 +1095,12 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
         <button className="inst-btn" onClick={() => setSoundOpen(true)} aria-label="Sound settings" title="Sound">
           <SoundIcon size={17} />
         </button>
-        <div className="t-meta">
-          <button className="t-bpm-btn" onClick={() => setTempoOpen(true)} aria-label="Change tempo">
-            {song.bpm} BPM
-          </button>
-          <span className="t-sig-row">
-            <button className="t-sig-btn" onClick={() => setSigOpen(true)} aria-label="Change time signature">
-              {song.timeSignature}
-            </button>
-          </span>
-        </div>
+        <button className="t-bpm-btn" onClick={() => setTempoOpen(true)} aria-label="Change tempo">
+          {song.bpm} BPM
+        </button>
+        <button className="t-sig-btn" onClick={() => setSigOpen(true)} aria-label="Change time signature">
+          {song.timeSignature}
+        </button>
       </footer>
 
       {splitOpen && selPos && selMeasure && (

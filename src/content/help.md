@@ -79,7 +79,7 @@ In the strip:
 - **Tempo**: tap the BPM number to open the tempo panel — steppers (hold to
   scrub), a slider, and a **TAP** pad you tap in rhythm. Tempo changes apply
   live while the song plays.
-- **Time signature**: tap the signature under the BPM. The BPM always means
+- **Time signature**: tap the signature next to the BPM. The BPM always means
   quarter notes, so switching 4/4 → 6/8 keeps the pulse steady. Individual
   measures can override the signature (measure ⚙).
 - The screen stays awake while the song plays.
