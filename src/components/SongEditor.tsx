@@ -163,6 +163,8 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   const [patternEditor, setPatternEditor] = useState<null | { target: "song" | "measure" | "none"; id?: string }>(null);
   const [patternsOpen, setPatternsOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);
+  const [keySheet, setKeySheet] = useState(false);
+  const [keyPick, setKeyPick] = useState<number | null>(null); // pending target key idx
   const [tempoOpen, setTempoOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
@@ -372,14 +374,21 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
     setActiveSlot(0);
   };
 
-  // Rotating the key TRANSPOSES the song: every chord shifts with the key,
-  // so the roman-numeral harmony stays identical in the new key.
-  const rotateKey = (dir: 1 | -1) => {
-    const next = ((keyIdx + dir) % 12 + 12) % 12;
+  // Changing key can either TRANSPOSE (chords shift with the key — the
+  // roman-numeral harmony stays identical) or just relabel the key (chords
+  // keep their absolute pitches and take new roles). The key sheet asks.
+  const applyKey = (next: number, transpose: boolean) => {
+    const delta = ((next - keyIdx) % 12 + 12) % 12;
     edit(
-      (s) => ({ ...s, songKey: FIFTHS[next].maj, sections: transposeDoc(s.sections, dir) }),
+      (s) => ({
+        ...s,
+        songKey: FIFTHS[next].maj,
+        sections: transpose ? transposeDoc(s.sections, delta) : s.sections,
+      }),
       "key"
     );
+    setKeyPick(null);
+    setKeySheet(false);
   };
 
   const clearTransient = () => {
@@ -808,9 +817,13 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
       {doc.note && <p className="note-text note-song">{doc.note}</p>}
 
       <div className="key-row">
-        <button className="key-arrow" onClick={() => rotateKey(-1)} aria-label="Transpose down a fifth">←</button>
-        <span className="key-pill">{FIFTHS[keyIdx].maj} major</span>
-        <button className="key-arrow" onClick={() => rotateKey(1)} aria-label="Transpose up a fifth">→</button>
+        <button
+          className="key-pill key-pill-btn"
+          onClick={() => { setKeyPick(null); setKeySheet(true); }}
+          aria-label="Change key"
+        >
+          {FIFTHS[keyIdx].maj} major <span className="key-caret">▾</span>
+        </button>
         <button
           className="key-arrow wheel-toggle"
           onClick={() => {
@@ -1277,6 +1290,68 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
       )}
 
       {tempoOpen && <TempoSheet bpm={song.bpm} onSet={setBpm} onClose={() => setTempoOpen(false)} />}
+
+      {keySheet && (
+        <Sheet
+          title="Key"
+          sub={`${FIFTHS[keyIdx].maj} major`}
+          label="Change key"
+          onClose={() => { setKeySheet(false); setKeyPick(null); }}
+        >
+          {keyPick === null ? (
+            <>
+              <p className="sheet-label">Pick a key</p>
+              <div className="ext-pills key-grid">
+                {FIFTHS.map((e, i) => (
+                  <button
+                    key={e.maj}
+                    className={`ext-pill ${i === keyIdx ? "ext-active" : ""}`}
+                    onClick={() => {
+                      if (i === keyIdx) {
+                        setKeySheet(false);
+                        return;
+                      }
+                      // Nothing to transpose in an empty song — just switch.
+                      const hasChords = Object.values(doc.parts).some((p) =>
+                        p.lines.some((l) => l.measures.some((m) => m.slots.some(Boolean)))
+                      );
+                      if (hasChords) setKeyPick(i);
+                      else applyKey(i, false);
+                    }}
+                  >
+                    {e.maj}
+                    <span className="key-rel">{e.min}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="share-note">Keys follow the circle of fifths — neighbors share most of their chords.</p>
+            </>
+          ) : (
+            <>
+              <p className="sheet-label">
+                {FIFTHS[keyIdx].maj} major → {FIFTHS[keyPick].maj} major
+              </p>
+              <p className="share-note">
+                Transpose the chords along with the key? Every chord shifts so
+                the song keeps the same harmony, just higher or lower. If you
+                keep the chords, they stay on the same notes and only take new
+                roles in {FIFTHS[keyPick].maj} major.
+              </p>
+              <div className="key-confirm">
+                <button className="sheet-done" onClick={() => applyKey(keyPick, true)}>
+                  Transpose chords
+                </button>
+                <button className="part-btn" onClick={() => applyKey(keyPick, false)}>
+                  Keep chords as they are
+                </button>
+                <button className="part-btn key-cancel" onClick={() => setKeyPick(null)}>
+                  Back
+                </button>
+              </div>
+            </>
+          )}
+        </Sheet>
+      )}
 
       {sigOpen && (
         <Sheet title="Song settings" sub="whole song" label="Song settings" onClose={() => setSigOpen(false)}>

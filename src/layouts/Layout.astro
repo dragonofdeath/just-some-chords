@@ -521,6 +521,47 @@ const { title = "Just Some Chords" } = Astro.props;
     border-radius: 999px;
     padding: 7px 16px;
   }
+  .key-pill-btn {
+    border: 0;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .key-caret {
+    opacity: 0.65;
+    font-size: 11px;
+  }
+  .ext-pills.key-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .key-grid .ext-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 9px 0;
+  }
+  .key-rel {
+    font-size: 10.5px;
+    font-weight: 400;
+    opacity: 0.6;
+  }
+  .key-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .key-confirm .sheet-done,
+  .key-confirm .part-btn {
+    width: 100%;
+    text-align: center;
+  }
+  .key-cancel {
+    color: var(--ink-soft);
+  }
   .key-arrow {
     background: var(--paper-raised);
     border: 1px solid var(--rule);

@@ -13,9 +13,12 @@ but you can start writing without an account.
   for the full circle of fifths — every major and minor chord, with the
   in-key ones highlighted. Chords near each other on the wheel sound good
   together.
-- **Changing key transposes the song**: the ← → arrows shift the key *and*
-  every chord with it, so the harmony (the roman numerals) stays identical.
-  Use it to find a comfortable singing key at any point.
+- **Changing key**: tap the key pill (e.g. *G major ▾*) and pick any of the
+  twelve keys. You'll be asked whether to **transpose the chords** along with
+  it — transposing shifts every chord so the harmony (the roman numerals)
+  stays identical, just higher or lower; *keep chords as they are* leaves
+  the notes untouched and only changes which chords count as in-key. Use
+  transpose to find a comfortable singing key at any point.
 
 ## Parts, lines and the arrangement
 
