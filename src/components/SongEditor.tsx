@@ -46,6 +46,7 @@ import SoundSheet from "./sheets/SoundSheet";
 import PatternEditorSheet, { type PatternDraft } from "./sheets/PatternEditorSheet";
 import PatternsSheet from "./sheets/PatternsSheet";
 import SplitSheet from "./sheets/SplitSheet";
+import TempoSheet from "./sheets/TempoSheet";
 import { AddPartSheet, LineSheet, PartSheet } from "./sheets/PartSheet";
 import Sheet from "./sheets/Sheet";
 
@@ -159,6 +160,7 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const [patternEditor, setPatternEditor] = useState<null | { target: "song" | "measure" | "none"; id?: string }>(null);
   const [patternsOpen, setPatternsOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);
+  const [tempoOpen, setTempoOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
@@ -170,7 +172,6 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
   const playCfg = useRef<{ loop?: Sel; startPos?: Pos } | null>(null);
   const playPosRef = useRef<Pos | null>(null);
   const playingRef = useRef(false);
-  const holdTimer = useRef<{ t?: ReturnType<typeof setTimeout>; i?: ReturnType<typeof setInterval> }>({});
   const previewBus = useRef<GainNode | null>(null);
   const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
   const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -539,32 +540,8 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
     return () => clearTimeout(id);
   }, [song.bpm, mixKey]);
 
-  // ---------- BPM stepper (±1, hold to auto-repeat) ----------
-  // Click is the universal path (works on every device); pointer events only
-  // ADD hold-to-repeat where supported, with a timestamp guard so the click
-  // that follows a pointer tap doesn't double-bump.
-  const lastPointerBump = useRef(0);
-  const bumpBpm = (delta: number) =>
-    edit((s) => ({ ...s, bpm: Math.min(220, Math.max(40, s.bpm + delta)) }), "bpm");
-  const bpmHoldStart = (delta: number) => {
-    lastPointerBump.current = Date.now();
-    bumpBpm(delta);
-    holdTimer.current.t = setTimeout(() => {
-      holdTimer.current.i = setInterval(() => {
-        lastPointerBump.current = Date.now();
-        bumpBpm(delta);
-      }, 70);
-    }, 450);
-  };
-  const bpmHoldEnd = () => {
-    if (holdTimer.current.t) clearTimeout(holdTimer.current.t);
-    if (holdTimer.current.i) clearInterval(holdTimer.current.i);
-    holdTimer.current = {};
-  };
-  const bpmClick = (delta: number) => {
-    if (Date.now() - lastPointerBump.current < 600) return; // pointer already handled this tap
-    bumpBpm(delta);
-  };
+  const setBpm = (v: number) =>
+    edit((s) => ({ ...s, bpm: Math.min(220, Math.max(40, Math.round(v))) }), "bpm");
 
   // ---------- save / share ----------
   const save = async (override?: SavedSong, silent = false) => {
@@ -1028,29 +1005,9 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           Sound
         </button>
         <div className="t-meta">
-          <div className="t-bpm">
-            <button
-              className="bpm-btn"
-              onPointerDown={() => bpmHoldStart(-1)}
-              onPointerUp={bpmHoldEnd}
-              onPointerLeave={bpmHoldEnd}
-              onPointerCancel={bpmHoldEnd}
-              onClick={() => bpmClick(-1)}
-              onContextMenu={(e) => e.preventDefault()}
-              aria-label="Slower"
-            >−</button>
-            <span>{song.bpm} BPM</span>
-            <button
-              className="bpm-btn"
-              onPointerDown={() => bpmHoldStart(1)}
-              onPointerUp={bpmHoldEnd}
-              onPointerLeave={bpmHoldEnd}
-              onPointerCancel={bpmHoldEnd}
-              onClick={() => bpmClick(1)}
-              onContextMenu={(e) => e.preventDefault()}
-              aria-label="Faster"
-            >+</button>
-          </div>
+          <button className="t-bpm-btn" onClick={() => setTempoOpen(true)} aria-label="Change tempo">
+            {song.bpm} BPM
+          </button>
           <span className="t-sig-row">
             <button className="t-sig-btn" onClick={() => setSigOpen(true)} aria-label="Change time signature">
               {song.timeSignature}
@@ -1315,6 +1272,8 @@ export default function SongEditor({ songId, initialSong, source = "member" }: P
           onClose={() => setPatternsOpen(false)}
         />
       )}
+
+      {tempoOpen && <TempoSheet bpm={song.bpm} onSet={setBpm} onClose={() => setTempoOpen(false)} />}
 
       {sigOpen && (
         <Sheet title="Song settings" sub="whole song" label="Song settings" onClose={() => setSigOpen(false)}>

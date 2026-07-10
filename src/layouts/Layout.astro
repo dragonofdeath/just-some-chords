@@ -1149,6 +1149,103 @@ const { title = "Just Some Chords" } = Astro.props;
     align-items: center;
     gap: 4px;
   }
+  .t-bpm-btn {
+    border: none;
+    background: transparent;
+    padding: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    text-align: left;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* tempo sheet */
+  .tempo-grid {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+    margin: 6px 0 16px;
+  }
+  .tempo-left {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 18px;
+  }
+  .tempo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .tempo-step {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .tempo-readout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .tempo-num {
+    font-family: var(--serif);
+    font-size: 52px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .tempo-unit {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  .tempo-slider {
+    width: 100%;
+    accent-color: var(--green);
+    height: 26px;
+  }
+  .tap-pad {
+    width: 116px;
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    background: var(--paper);
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    cursor: pointer;
+    flex-shrink: 0;
+    min-height: 132px;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .tap-flash {
+    background: var(--wedge-in);
+    border-color: var(--green);
+    color: var(--green-deep);
+  }
   .t-sig-btn {
     border: none;
     background: transparent;
