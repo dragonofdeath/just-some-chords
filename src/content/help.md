@@ -116,7 +116,10 @@ next to Play:
   notes). Switch the grid between 8ths and 16ths. **▶ Preview** plays the
   draft on your key's I chord. *⚙ Manage* lists your patterns for edit,
   clone, delete.
-- **Bass** — root+fifth or root-note lines under your chords.
+- **Bass** — lines under your chords: root notes (the default for new
+  songs), root+fifth, root+octave, a walking line (root–third–fifth–octave)
+  or pumping 8ths. Altered chords bend the line with them — a dim chord
+  walks through its flat fifth.
 - **Drums** — synthesized kit presets (Rock, Pop 8ths, Waltz, Shuffle) or a
   plain Click; all follow the measure's time signature.
 
@@ -130,11 +133,12 @@ Sound settings are part of the song, so they travel with sharing.
   green **Save** button signs you in — the song comes with you through
   sign-up and lands in your songbook.
 - **Undo/redo**: ↶ ↷ in the header (or Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z).
-- **Tags**: song settings (tap the time signature) has a comma-separated
-  **tags** field — "ballad, gig set, idea". *My songs* shows a search box
-  and your tags as filter chips: search matches titles and tags, chips
-  narrow to songs carrying **all** selected tags. Tags travel with the
-  song, so a shared copy keeps them.
+- **Tags**: song settings (tap the time signature) shows your song's tags
+  and every tag from the rest of your songbook — tap **＋ tag** to add one,
+  tap a tag to remove it, or type a brand-new one. *My songs* shows a
+  search box and your tags as filter chips: search matches titles and
+  tags, chips narrow to songs carrying **all** selected tags. Tags travel
+  with the song, so a shared copy keeps them.
 
 ## Sharing
 

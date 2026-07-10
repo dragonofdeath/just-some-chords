@@ -169,7 +169,7 @@ export function emptyDoc(): SongDocV2 {
       p2: { name: "Chorus", lines: [{ measures: [] }] },
     },
     arrangement: [{ part: "p1" }, { part: "p2" }],
-    playback: { bass: true },
+    playback: { bass: true, bassPattern: "root" },
   };
 }
 

@@ -153,30 +153,53 @@ export function chordPatternEvents(id: string, n: number, d: number, custom?: Cu
 // ---------- bass ----------
 
 export const BASS_PATTERNS: Record<string, string> = {
-  root5: "Root + fifth",
   root: "Root notes",
+  root5: "Root + fifth",
+  oct: "Root + octave",
+  walk: "Walking",
+  pump: "Pumping 8ths",
 };
 
 export interface BassEvent {
   t: number;
   dur: number;
-  tone: 0 | 2; // 0 root, 2 fifth
+  tone: 0 | 1 | 2 | 3; // chord tones: root, third, fifth, octave
   accent?: boolean;
 }
 
 export function bassPatternEvents(id: string, n: number, d: number): BassEvent[] {
+  const pulse = pulseOf(n, d);
+
   if (id === "root") {
     return [{ t: 0, dur: n, tone: 0, accent: true }];
   }
-  // root5 (default): root on the downbeat, fifth halfway — snapped to the
-  // meter's pulse so it lands on a real beat (bar 3 of a waltz, group 2 of 6/8).
-  const pulse = pulseOf(n, d);
+  if (id === "walk") {
+    // one chord tone per pulse, climbing root → third → fifth → octave
+    const cycle: (0 | 1 | 2 | 3)[] = [0, 1, 2, 3];
+    const out: BassEvent[] = [];
+    for (let k = 0; k * pulse < n; k++) {
+      out.push({ t: k * pulse, dur: Math.min(pulse, n - k * pulse), tone: cycle[k % 4], accent: k === 0 });
+    }
+    return out;
+  }
+  if (id === "pump") {
+    // driving straight 8ths on the root
+    const step = d === 8 ? 1 : 0.5;
+    const out: BassEvent[] = [];
+    for (let k = 0; k * step < n - 1e-6; k++) {
+      out.push({ t: k * step, dur: step, tone: 0, accent: k === 0 });
+    }
+    return out;
+  }
+  // root5 / oct: root on the downbeat, fifth (or octave) halfway — snapped to
+  // the meter's pulse so it lands on a real beat (bar 3 of a waltz, group 2 of 6/8).
+  const alt: 2 | 3 = id === "oct" ? 3 : 2;
   const half = Math.round(n / 2 / pulse) * pulse;
   if (half <= 0 || half >= n) {
     return [{ t: 0, dur: n, tone: 0, accent: true }];
   }
   return [
     { t: 0, dur: half, tone: 0, accent: true },
-    { t: half, dur: n - half, tone: 2 },
+    { t: half, dur: n - half, tone: alt },
   ];
 }

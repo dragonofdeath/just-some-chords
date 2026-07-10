@@ -192,6 +192,8 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   const [sigOpen, setSigOpen] = useState(false);
   const [keySheet, setKeySheet] = useState(false);
   const [extSheet, setExtSheet] = useState(false);
+  const [allTags, setAllTags] = useState<string[] | null>(null); // songbook-wide, lazy
+  const [newTag, setNewTag] = useState("");
   const [keyPick, setKeyPick] = useState<number | null>(null); // pending target key idx
   const [tempoOpen, setTempoOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -445,6 +447,37 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
     setMoveSel(null);
   };
 
+  // Tag picker: fetch the songbook's tags once, when song settings first
+  // opens. Anonymous users just get the type-a-new-tag path.
+  useEffect(() => {
+    if (!sigOpen || allTags !== null) return;
+    fetch("/api/tags")
+      .then((r) => (r.ok ? r.json() : { tags: [] }))
+      .then((j) => setAllTags(Array.isArray(j.tags) ? j.tags : []))
+      .catch(() => setAllTags([]));
+  }, [sigOpen, allTags]);
+
+  const addTag = () => {
+    const t = newTag.trim();
+    if (!t) return;
+    editDoc((d) => ({ ...d, tags: cleanTags([...(d.tags ?? []), t]) }), "tags");
+    setAllTags((prev) => {
+      if (!prev || prev.some((x) => x.toLowerCase() === t.toLowerCase())) return prev;
+      return [...prev, t].sort((a, b) => a.localeCompare(b));
+    });
+    setNewTag("");
+  };
+
+  // After creating a part/line from a sheet: make it the "adding here"
+  // target and scroll it into view (the row ref exists after the re-render).
+  const focusLine = (ai: number, li: number) => {
+    setActive({ ai, li });
+    clearTransient();
+    setTimeout(() => {
+      rowRefs.current.get(`${ai}:${li}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 120);
+  };
+
   // ---------- playback ----------
   // Keep the screen awake while the song plays (long practice loops).
   const acquireWakeLock = async () => {
@@ -527,7 +560,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           break;
         }
         case "bass":
-          playMidiAt(bassMidi(ev.chord!, (ev.tone ?? 0) as 0 | 2), rel, ev.dur, "bass", (ev.accent ? 0.62 : 0.5) * lvl.bass, bus);
+          playMidiAt(bassMidi(ev.chord!, (ev.tone ?? 0) as 0 | 1 | 2 | 3), rel, ev.dur, "bass", (ev.accent ? 0.62 : 0.5) * lvl.bass, bus);
           break;
         case "drum":
           playDrum(ctx, ev.drum!, rel, !!ev.accent, bus, lvl.drums);
@@ -1196,9 +1229,12 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
             setPartSheet(to);
             clearTransient();
           }}
-          onAddLine={() =>
-            editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, lines: [...p.lines, { measures: [] }] })))
-          }
+          onAddLine={() => {
+            const newLi = partAt(doc, partSheet)?.part.lines.length ?? 0;
+            editDoc((d) => mapPart(d, partSheet, (p) => ({ ...p, lines: [...p.lines, { measures: [] }] })));
+            setPartSheet(null);
+            focusLine(partSheet, newLi);
+          }}
           onAddPlacement={() => {
             editDoc((d) => {
               const arr = [...d.arrangement];
@@ -1218,7 +1254,8 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
               arr.splice(partSheet + 1, 0, { part: id, repeat: d.arrangement[partSheet].repeat });
               return { ...d, parts: { ...d.parts, [id]: copy }, arrangement: arr };
             });
-            clearTransient();
+            setPartSheet(null);
+            focusLine(partSheet + 1, 0);
           }}
           onDeletePlacement={() => {
             editDoc((d) => {
@@ -1286,7 +1323,8 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
                 return { ...p, lines };
               })
             );
-            clearTransient();
+            setLineSheet(null);
+            focusLine(lineSheet.ai, lineSheet.li + 1);
           }}
           onLoop={() => {
             const line = partAt(doc, lineSheet.ai)?.part.lines[lineSheet.li];
@@ -1552,16 +1590,48 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
             placeholder="e.g. capo 2, original by…, tune down half step"
             aria-label="Song notes"
           />
-          <p className="sheet-label">Tags — comma separated, for filtering your songbook</p>
-          <input
-            className="rename-input"
-            defaultValue={(doc.tags ?? []).join(", ")}
-            onChange={(e) =>
-              editDoc((d) => ({ ...d, tags: cleanTags(e.target.value.split(",")) }), "tags")
-            }
-            placeholder="e.g. ballad, gig set, idea"
-            aria-label="Song tags"
-          />
+          <p className="sheet-label">Tags — for filtering your songbook</p>
+          <div className="ext-pills">
+            {(doc.tags ?? []).map((t) => (
+              <button
+                key={t}
+                className="ext-pill ext-active"
+                onClick={() =>
+                  editDoc((d) => ({ ...d, tags: cleanTags((d.tags ?? []).filter((x) => x !== t)) }), "tags")
+                }
+                aria-label={`Remove tag ${t}`}
+              >
+                {t} ✕
+              </button>
+            ))}
+            {(allTags ?? [])
+              .filter((t) => !(doc.tags ?? []).some((x) => x.toLowerCase() === t.toLowerCase()))
+              .map((t) => (
+                <button
+                  key={t}
+                  className="ext-pill"
+                  onClick={() => editDoc((d) => ({ ...d, tags: cleanTags([...(d.tags ?? []), t]) }), "tags")}
+                  aria-label={`Add tag ${t}`}
+                >
+                  ＋ {t}
+                </button>
+              ))}
+          </div>
+          <div className="tag-add-row">
+            <input
+              className="rename-input"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addTag();
+              }}
+              placeholder="New tag…"
+              aria-label="New tag"
+            />
+            <button className="part-btn" onClick={addTag} disabled={!newTag.trim()}>
+              Add
+            </button>
+          </div>
           <div className="sheet-actions">
             <span />
             <button className="sheet-done" onClick={() => setSigOpen(false)}>Done</button>

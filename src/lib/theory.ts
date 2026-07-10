@@ -230,13 +230,16 @@ export function chordToneSemis(c: Chord): number[] {
   return [pc, pc + third, pc + fifth, pc + top];
 }
 
-// Bass register: root voiced into E1..D#2 (midi 28–39); fifth sits above it
-// (honoring altered fifths — dim, aug, 7♭5 …).
-export function bassMidi(c: Chord, tone: 0 | 2): number {
+// Bass register: root voiced into E1..D#2 (midi 28–39); the other chord
+// tones sit above it (honoring altered thirds/fifths — dim, aug, 7♭5 …).
+export function bassMidi(c: Chord, tone: 0 | 1 | 2 | 3): number {
   const pc = chordPitchClass(c);
   const root = 28 + ((pc - 4 + 12) % 12);
-  const fifth = SHAPES[c.ext ?? ""]?.fifth ?? 7;
-  return tone === 2 ? root + fifth : root;
+  const ext = c.ext ?? "";
+  if (tone === 3) return root + 12;
+  if (tone === 2) return root + (ext === "5" ? 7 : SHAPES[ext]?.fifth ?? 7);
+  if (tone === 1) return root + (ext === "5" ? 7 : SHAPES[ext]?.third ?? (c.quality === "min" ? 3 : 4));
+  return root;
 }
 
 // Semitone offsets from C4 for the full voicing (bass + chord tones).
