@@ -130,6 +130,11 @@ Sound settings are part of the song, so they travel with sharing.
   green **Save** button signs you in — the song comes with you through
   sign-up and lands in your songbook.
 - **Undo/redo**: ↶ ↷ in the header (or Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z).
+- **Tags**: song settings (tap the time signature) has a comma-separated
+  **tags** field — "ballad, gig set, idea". *My songs* shows a search box
+  and your tags as filter chips: search matches titles and tags, chips
+  narrow to songs carrying **all** selected tags. Tags travel with the
+  song, so a shared copy keeps them.
 
 ## Sharing
 

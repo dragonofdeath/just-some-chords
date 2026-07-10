@@ -16,6 +16,7 @@ import {
   mixLevel,
   newPartId,
   newPatternId,
+  cleanTags,
   partAt,
   moveMeasures,
   removeCustomPattern,
@@ -330,6 +331,23 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
     }, 1500);
     return () => clearTimeout(id);
   }, [song, dirty, saving, needsLogin]);
+
+  // Once a silent save has bounced to needsLogin, keep the on-device promise
+  // honest: re-stash the draft after every further edit (the autosave above
+  // is parked, so without this only the FIRST 401's snapshot would survive
+  // a reload).
+  useEffect(() => {
+    if (!needsLogin || !dirty || itemId) return;
+    const id = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ song }));
+        meaningfulDirty.current = false;
+      } catch {
+        // storage unavailable — beforeunload still guards
+      }
+    }, 800);
+    return () => clearTimeout(id);
+  }, [song, dirty, needsLogin, itemId]);
 
   useEffect(() => {
     preload(instrument);
@@ -1533,6 +1551,16 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
             }
             placeholder="e.g. capo 2, original by…, tune down half step"
             aria-label="Song notes"
+          />
+          <p className="sheet-label">Tags — comma separated, for filtering your songbook</p>
+          <input
+            className="rename-input"
+            defaultValue={(doc.tags ?? []).join(", ")}
+            onChange={(e) =>
+              editDoc((d) => ({ ...d, tags: cleanTags(e.target.value.split(",")) }), "tags")
+            }
+            placeholder="e.g. ballad, gig set, idea"
+            aria-label="Song tags"
           />
           <div className="sheet-actions">
             <span />

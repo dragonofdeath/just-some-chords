@@ -81,6 +81,23 @@ export interface SongDocV2 {
   playback?: PlaybackConfig;
   note?: string;
   mode?: ModeId; // key mode; absent = major (songKey stays the tonic name)
+  tags?: string[]; // song tags (list-page filtering); short free-text labels
+}
+
+/** Normalize a raw tag list: trimmed, deduped case-insensitively, capped. */
+export function cleanTags(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of raw) {
+    if (typeof t !== "string") continue;
+    const tag = t.trim().slice(0, 24);
+    if (!tag || seen.has(tag.toLowerCase())) continue;
+    seen.add(tag.toLowerCase());
+    out.push(tag);
+    if (out.length >= 12) break;
+  }
+  return out.length ? out : undefined;
 }
 
 export function cleanNote(v: unknown): string | undefined {
@@ -190,6 +207,8 @@ export function migrateSong(raw: any): SongDocV2 {
     const doc: SongDocV2 = { v: 2, parts, arrangement };
     const mode = sanitizeMode(raw.mode);
     if (mode) doc.mode = mode;
+    const tags = cleanTags(raw.tags);
+    if (tags) doc.tags = tags;
     if (raw.patterns && typeof raw.patterns === "object") {
       const pats: Record<string, CustomPattern> = {};
       for (const [id, p] of Object.entries<any>(raw.patterns)) {
