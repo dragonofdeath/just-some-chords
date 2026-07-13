@@ -173,7 +173,7 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
           {rows.map((s, i) => (
             <li key={s._id}>
               <div className="song-card pl-row">
-                <Link className="pl-song" href={`/songs/${s._id}`}>
+                <Link className="pl-song" href={`/songs/${s._id}?from=/playlists/${playlistId}`}>
                   <span className="s-title">{s.title}</span>
                   <br />
                   <span className="s-sub">

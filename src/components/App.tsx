@@ -13,6 +13,13 @@ import { fetchSongs, loginUrl, playlistFromCache, songFromCache } from "../lib/a
 
 let newSongNonce = 0;
 
+// Where the editor's ‹ returns to — songs opened from a playlist carry
+// ?from=/playlists/<id> so back lands on that playlist, not the song list.
+function backTarget(): string {
+  const from = new URLSearchParams(window.location.search).get("from");
+  return from && /^\/(songs|playlists)(\/|$)/.test(from) ? from : "/songs";
+}
+
 function SongRoute({ id }: { id: string }) {
   const [, navigate] = useLocation();
   // key remounts the editor on REAL navigation only. Saving a new song
@@ -77,7 +84,7 @@ function SongRoute({ id }: { id: string }) {
       }
     : null;
   return (
-    <SongEditor key={inst.key} songId={inst.songId} initialSong={initialSong} onBack={() => navigate("/songs")} />
+    <SongEditor key={inst.key} songId={inst.songId} initialSong={initialSong} onBack={() => navigate(backTarget())} />
   );
 }
 
