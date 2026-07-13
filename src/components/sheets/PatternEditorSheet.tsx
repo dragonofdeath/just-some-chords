@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Sheet from "./Sheet";
+import { IconPreview } from "../icons";
 
 // Step grid over one 4/4 bar (tiled/truncated across other meters).
 // Cell cycle: off → block → accent block → arpeggio → root → hold.
@@ -81,7 +82,7 @@ export default function PatternEditorSheet({ initial, onSave, onPreview, onClose
           </button>
         ))}
         <button className="part-btn pat-preview" onClick={() => onPreview(draft)}>
-          ▶ Preview
+          <IconPreview size={14} /> Preview
         </button>
       </div>
       <div className="pat-grid">

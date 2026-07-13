@@ -141,6 +141,26 @@ const { title = "Just Some Chords" } = Astro.props;
     font-weight: 600;
   }
 
+  /* ---------- icons ---------- */
+  /* Shared SVG icon set (src/components/icons.tsx). Inline next to text they
+     sit on the baseline; in fixed-size buttons the flex rules below center
+     them. */
+  .ico {
+    vertical-align: -0.18em;
+    flex: none;
+  }
+  .back,
+  .hist-btn,
+  .sel-clear,
+  .mix-mute,
+  .pl-btn,
+  .pat-del,
+  .sb-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   /* ---------- song list ---------- */
   .list-head {
     display: flex;
@@ -993,11 +1013,6 @@ const { title = "Just Some Chords" } = Astro.props;
     border-color: var(--ink);
     color: var(--paper);
   }
-  .strip-to {
-    width: auto;
-    padding: 0 9px;
-    font-style: italic;
-  }
   .strip-close {
     margin-left: auto;
   }
@@ -1223,11 +1238,6 @@ const { title = "Just Some Chords" } = Astro.props;
     background: var(--ink);
     border-color: var(--ink);
     color: var(--paper);
-  }
-  .countin-label {
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
   }
   .pat-grid {
     display: grid;

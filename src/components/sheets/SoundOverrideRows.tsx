@@ -1,6 +1,7 @@
 import type { SongDocV2 } from "../../lib/songModel";
 import { BUILTIN_PATTERNS, patternLabel } from "../../lib/patterns";
 import { TIME_SIGNATURES } from "../../lib/theory";
+import { IconAdd } from "../icons";
 
 // The two per-scope sound rows (time signature + rhythm pattern), shared by
 // the part, line and measure sheets. `sig`/`pat` are THIS scope's overrides;
@@ -60,7 +61,7 @@ export default function SoundOverrideRows({
           </button>
         ))}
         {onNewPattern && (
-          <button className="ext-pill" onClick={onNewPattern}>＋ New…</button>
+          <button className="ext-pill" onClick={onNewPattern}><IconAdd size={11} /> New…</button>
         )}
       </div>
     </>

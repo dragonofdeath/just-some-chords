@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { cache, fetchMember, fetchSongs, loginUrl } from "../lib/appCache";
 import { countMeasures, countSections, migrateSong } from "../lib/songModel";
 import { MODES } from "../lib/theory";
+import { IconAdd } from "./icons";
 
 // The songbook list — SPA port of the old songs/index.astro. Renders from the
 // in-memory cache instantly when coming back from the editor, revalidates in
@@ -161,7 +162,7 @@ export default function SongList() {
       )}
 
       <div className="new-song-row">
-        <Link className="new-song" href="/songs/new">＋ New song</Link>
+        <Link className="new-song" href="/songs/new"><IconAdd size={13} /> New song</Link>
       </div>
     </main>
   );

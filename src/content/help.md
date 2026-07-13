@@ -10,11 +10,11 @@ but you can start writing without an account.
   I, IV, V, vi, ii, iii; other modes show their own set, tonic first.
   Tap one to hear it and add it to the active line — the part marked
   **"adding here"**.
-- **The full wheel**: tap the ◯ button next to the key to swap the compact row
+- **The full wheel**: tap the wheel button next to the key to swap the compact row
   for the full circle of fifths — every major and minor chord, with the
   in-key ones highlighted. Chords near each other on the wheel sound good
   together.
-- **Changing key**: tap the key pill (e.g. *G major ▾*) and pick any of the
+- **Changing key**: tap the key pill (e.g. *G major*) and pick any of the
   twelve keys. You'll be asked whether to **transpose the chords** along with
   it — transposing shifts every chord so the harmony (the roman numerals)
   stays identical, just higher or lower; *keep chords as they are* leaves
@@ -50,11 +50,11 @@ Tap the measure again (or anywhere outside) to deselect.
 
 In the strip:
 
-- **Chord slots** — a measure can hold several chords. Tap **Split** to slice
+- **Chord slots** — a measure can hold several chords. Tap the **split button** to slice
   the measure on a 16th-note grid: tap where each new chord should start
   (uneven splits like 6+10 sixteenths are fine, up to 8 chords). Back in the
   strip, tap a slot chip and then the wheel to set its chord.
-- **— (rest)** turns the selected slot into silence. Chords and bass go
+- The **rest button** turns the selected slot into silence. Chords and bass go
   quiet; drums keep playing.
 - **Extensions** — the second row (7, maj7, 6, 9, add9, sus2, sus4, dim)
   modifies the selected chord; each tap plays a preview. The **…** pill at
@@ -63,18 +63,18 @@ In the strip:
   color these too — a minor chord with 7♭5 is your half-diminished (m7♭5),
   minor + 9 is m9, minor + maj7 is the James Bond chord. When a chord uses
   one of the catalog types, the … pill shows its name.
-- **⧉ duplicates** the selected measure in place; the **trash button
+- The **copy button duplicates** the selected measure in place; the **trash button
   removes** it.
-- The **guitar button** opens the measure's sound settings: a **time
+- The **piano button** opens the measure's sound settings: a **time
   signature** and a **rhythm pattern** override for just this measure.
 
 ## Selecting ranges, looping, moving
 
 - **Tap** = select one measure. Play then **starts from it**.
-- **Range**: select the first measure, tap **to…** in the strip, tap the last
+- **Range**: select the first measure, tap the **range button** in the strip, tap the last
   measure of the range (same line). Play then **loops the range forever** —
-  your practice loop. The line ⋯ menu also has *⟳ Loop this line*.
-- **Move**: hold a measure (~half a second) to lift it — or tap **Move** in
+  your practice loop. The line ⋯ menu also has *Loop this line*.
+- **Move**: hold a measure (~half a second) to lift it — or tap the **move button** in
   the strip — then drop it on any marker, in the same line or a different
   part. Moving measures in a shared part changes every placement of it.
 
@@ -82,7 +82,7 @@ In the strip:
 
 - **Play** runs the whole arrangement in order (repeats included), unless a
   measure or range is selected (see above).
-- **1·2** toggles a one-bar **count-in** of clicks.
+- The **count-in button** (1·2) toggles a one-bar **count-in** of clicks.
 - **Tempo**: tap the BPM number to open the tempo panel — steppers (hold to
   scrub), a slider, and a **TAP** pad you tap in rhythm. Tempo changes apply
   live while the song plays.
@@ -107,7 +107,7 @@ next to Play:
   arpeggios, Waltz, Offbeat (skank — ska/reggae upstrokes), or **Off** (bass
   and drums only).
 - **Sound is hierarchical**: the song sets the default; a **part** (its ⋯
-  sheet), a **line** (its ⋯ sheet) and a single **measure** (guitar button
+  sheet), a **line** (its ⋯ sheet) and a single **measure** (piano button
   in the edit strip) can each override the time signature and the rhythm.
   The most specific setting wins — measure beats line beats part beats
   song — and the *inherit* pill clears an override, showing what it falls

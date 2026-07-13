@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Measure, Pos, SongDocV2 } from "../lib/songModel";
 import { clampRepeat } from "../lib/songModel";
 import { chordLabel, chordRoman, type Chord, type ModeId } from "../lib/theory";
+import { IconAdd, IconMenu } from "./icons";
 
 export interface Sel {
   ai: number;
@@ -197,7 +198,7 @@ export default function PartView({
                     onOpenPart(ai);
                   }}
                 >
-                  ⋯
+                  <IconMenu size={18} />
                 </button>
               </span>
             </div>
@@ -261,7 +262,7 @@ export default function PartView({
                         onOpenLine(ai, li);
                       }}
                     >
-                      {clampRepeat(line.repeat) > 1 ? `${clampRepeat(line.repeat)}×` : "⋯"}
+                      {clampRepeat(line.repeat) > 1 ? `${clampRepeat(line.repeat)}×` : <IconMenu size={14} />}
                     </button>
                   </div>
                 </div>
@@ -270,7 +271,7 @@ export default function PartView({
           </section>
         );
       })}
-      <button className="add-section" onClick={onAdd}>＋ Add part</button>
+      <button className="add-section" onClick={onAdd}><IconAdd size={13} /> Add part</button>
     </div>
   );
 }

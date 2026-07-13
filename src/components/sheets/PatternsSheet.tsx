@@ -1,5 +1,6 @@
 import Sheet from "./Sheet";
 import type { SongDocV2 } from "../../lib/songModel";
+import { IconAdd, IconDuplicate, IconTrash } from "../icons";
 
 interface Props {
   doc: SongDocV2;
@@ -22,12 +23,12 @@ export default function PatternsSheet({ doc, onEdit, onClone, onDelete, onNew, o
             <span className="pat-row-steps">{p.steps} · {p.res === 16 ? "16ths" : "8ths"}</span>
           </span>
           <button className="part-btn" onClick={() => onEdit(id)}>Edit</button>
-          <button className="part-btn" onClick={() => onClone(id)}>⧉</button>
-          <button className="pat-del" onClick={() => onDelete(id)} aria-label={`Delete ${p.name}`}>🗑</button>
+          <button className="part-btn" onClick={() => onClone(id)} aria-label={`Clone ${p.name}`}><IconDuplicate size={14} /></button>
+          <button className="pat-del" onClick={() => onDelete(id)} aria-label={`Delete ${p.name}`}><IconTrash size={15} /></button>
         </div>
       ))}
       <div className="sheet-actions">
-        <button className="part-btn" onClick={onNew}>＋ New pattern</button>
+        <button className="part-btn" onClick={onNew}><IconAdd size={13} /> New pattern</button>
         <button className="sheet-done" onClick={onClose}>Done</button>
       </div>
     </Sheet>

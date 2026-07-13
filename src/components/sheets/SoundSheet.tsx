@@ -3,6 +3,7 @@ import { mixLevel, type Mix, type SongDocV2 } from "../../lib/songModel";
 import { BASS_PATTERNS, BUILTIN_PATTERNS } from "../../lib/patterns";
 import { DRUM_PRESETS } from "../../lib/drums";
 import { INSTRUMENTS, instrumentLabel, type Instrument } from "../../lib/sampler";
+import { IconAdd, IconMute } from "../icons";
 
 const MIX_TRACKS: Array<{ key: keyof Mix; label: string }> = [
   { key: "chords", label: "Chords" },
@@ -69,7 +70,7 @@ export default function SoundSheet({
               aria-label={`Mute ${label}`}
               title={muted ? "Unmute" : "Mute"}
             >
-              M
+              <IconMute size={15} />
             </button>
           </div>
         );
@@ -108,7 +109,7 @@ export default function SoundSheet({
             {p.name}
           </button>
         ))}
-        <button className="ext-pill" onClick={onNewPattern}>＋ New…</button>
+        <button className="ext-pill" onClick={onNewPattern}><IconAdd size={11} /> New…</button>
         {customs.length > 0 && (
           <button className="ext-pill" onClick={onManage}>⚙ Manage</button>
         )}

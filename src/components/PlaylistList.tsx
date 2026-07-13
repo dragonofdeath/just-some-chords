@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cache, fetchMember, fetchPlaylists, invalidatePlaylists, loginUrl } from "../lib/appCache";
+import { IconAdd, IconBack } from "./icons";
 
 // Playlists overview — SPA port of the old playlists/index.astro.
 
@@ -59,7 +60,7 @@ export default function PlaylistList() {
       </div>
       <div className="whoami">
         <span>
-          <Link className="fine-link" href="/songs">‹ My songs</Link>
+          <Link className="fine-link" href="/songs"><IconBack size={11} /> My songs</Link>
         </span>
         <span className="whoami-links">
           <a className="fine-link" href="/help">Help</a>
@@ -104,7 +105,7 @@ export default function PlaylistList() {
 
       <div className="new-song-row">
         <button className="new-song pl-add" type="button" disabled={creating} onClick={createPlaylist}>
-          {creating ? "Creating…" : createFailed ? "＋ New playlist — try again" : "＋ New playlist"}
+          {creating ? "Creating…" : <><IconAdd size={13} /> {createFailed ? "New playlist — try again" : "New playlist"}</>}
         </button>
       </div>
     </main>

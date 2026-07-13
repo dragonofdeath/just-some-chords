@@ -56,6 +56,27 @@ import SplitSheet from "./sheets/SplitSheet";
 import TempoSheet from "./sheets/TempoSheet";
 import { AddPartSheet, LineSheet, PartSheet } from "./sheets/PartSheet";
 import Sheet from "./sheets/Sheet";
+import {
+  IconAdd,
+  IconBack,
+  IconClose,
+  IconCompactView,
+  IconCountIn,
+  IconDuplicate,
+  IconFullWheel,
+  IconKeyDropdown,
+  IconMove,
+  IconPiano,
+  IconPlay,
+  IconRangeSelect,
+  IconRedo,
+  IconRest,
+  IconShare,
+  IconSplit,
+  IconStop,
+  IconTrash,
+  IconUndo,
+} from "./icons";
 
 interface SavedSong {
   _id?: string;
@@ -83,26 +104,9 @@ interface Props {
 
 const DRAFT_KEY = "jsc-draft";
 
-// Small guitar glyph — the app-wide "sound" icon (transport + measure strip).
-// Filled figure-8 body (nonzero winding knocks out the soundhole), diagonal
-// neck with a headstock bar.
-function SoundIcon({ size = 15 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M8.6 10.8A3.4 3.4 0 1 0 1.8 10.8A3.4 3.4 0 1 0 8.6 10.8ZM10.4 8A2.4 2.4 0 1 0 5.6 8A2.4 2.4 0 1 0 10.4 8ZM7.5 9.6A1.1 1.1 0 1 1 5.3 9.6A1.1 1.1 0 1 1 7.5 9.6Z"
-        fill="currentColor"
-      />
-      <path
-        d="M9.4 6.6L13.4 2.6M13 1.4l1.9 1.9"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+// The app-wide "sound" icon (transport + measure strip) — piano keys from the
+// shared icon set.
+const SoundIcon = IconPiano;
 
 function newSong(): SavedSong {
   const doc = emptyDoc();
@@ -912,13 +916,13 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
     <div className="editor">
       <header className="ed-head">
         {onBack ? (
-          <button className="back" onClick={onBack} aria-label="Back to my songs">‹</button>
+          <button className="back" onClick={onBack} aria-label="Back to my songs"><IconBack size={22} /></button>
         ) : (
           <a
             className="back"
             href={backHref}
             aria-label={source === "shared" && !itemId ? "Home" : "Back to my songs"}
-          >‹</a>
+          ><IconBack size={22} /></a>
         )}
         <input
           className="title-input"
@@ -926,13 +930,11 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           onChange={(e) => edit((s) => ({ ...s, title: e.target.value }), "title")}
           aria-label="Song title"
         />
-        <button className="hist-btn" onClick={undo} disabled={!past.current.length} aria-label="Undo">↶</button>
-        <button className="hist-btn" onClick={redo} disabled={!future.current.length} aria-label="Redo">↷</button>
+        <button className="hist-btn" onClick={undo} disabled={!past.current.length} aria-label="Undo"><IconUndo size={16} /></button>
+        <button className="hist-btn" onClick={redo} disabled={!future.current.length} aria-label="Redo"><IconRedo size={16} /></button>
         {(source !== "shared" || itemId) && (
           <button className="share-btn" onClick={() => setShareOpen(true)} aria-label="Share song" title="Share song">
-            <svg width="17" height="17" viewBox="0 0 17 17">
-              <path d="M8.5 1.5v9M5 4.5l3.5-3 3.5 3M3.5 8v6h10V8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <IconShare size={18} />
           </button>
         )}
         {dirty && (needsLogin || (source === "shared" && !itemId) || !!saveError) ? (
@@ -966,7 +968,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           onClick={() => { setKeyPick(null); setKeySheet(true); }}
           aria-label="Change key"
         >
-          {keyLabel} <span className="key-caret">▾</span>
+          {keyLabel} <span className="key-caret"><IconKeyDropdown size={11} /></span>
         </button>
         <button
           className="key-arrow wheel-toggle"
@@ -983,7 +985,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           aria-label={wheelCompact ? "Show full wheel" : "Show compact chords"}
           title={wheelCompact ? "Full wheel" : "Compact"}
         >
-          {wheelCompact ? "◯" : "▂"}
+          {wheelCompact ? <IconFullWheel size={17} /> : <IconCompactView size={17} />}
         </button>
       </div>
 
@@ -1044,14 +1046,14 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           <span className="sel-info">
             Moving {moveSel.b - moveSel.a + 1 === 1 ? "1 measure" : `${moveSel.b - moveSel.a + 1} measures`} — drop it, or tap a slot marker
           </span>
-          <button className="sel-clear" onClick={() => setMoveSel(null)} aria-label="Cancel move">✕</button>
+          <button className="sel-clear" onClick={() => setMoveSel(null)} aria-label="Cancel move"><IconClose size={13} /></button>
         </div>
       )}
 
       {!moveSel && sel && sel.b > sel.a && (
         <div className="sel-bar">
           <span className="sel-info">{sel.b - sel.a + 1} measures — play loops this range</span>
-          <button className="sel-clear" onClick={() => setSel(null)} aria-label="Clear selection">✕</button>
+          <button className="sel-clear" onClick={() => setSel(null)} aria-label="Clear selection"><IconClose size={13} /></button>
         </div>
       )}
 
@@ -1069,11 +1071,12 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
             ))}
             <span className="strip-div" />
             <button
-              className="strip-mini strip-to"
+              className="strip-mini"
               onClick={() => setSplitOpen(true)}
               aria-label="Split this measure"
+              title="Split measure"
             >
-              Split
+              <IconSplit size={15} />
             </button>
             <span className="strip-div" />
             <button
@@ -1092,21 +1095,23 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
               aria-label="Toggle rest"
               title="Rest"
             >
-              —
+              <IconRest size={15} />
             </button>
             <button
-              className={`strip-mini strip-to ${pickingTo ? "strip-mini-active" : ""}`}
+              className={`strip-mini ${pickingTo ? "strip-mini-active" : ""}`}
               onClick={() => setPickingTo((p) => !p)}
               aria-label="Select a range up to another measure"
+              title="Select range"
             >
-              to…
+              <IconRangeSelect size={15} />
             </button>
             <button
-              className="strip-mini strip-to"
+              className="strip-mini"
               onClick={() => sel && setMoveSel(sel)}
               aria-label="Move this selection"
+              title="Move"
             >
-              Move
+              <IconMove size={15} />
             </button>
             <button
               className="strip-mini"
@@ -1114,7 +1119,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
               aria-label="Duplicate measure"
               title="Duplicate measure"
             >
-              ⧉
+              <IconDuplicate size={15} />
             </button>
             <button
               className="strip-mini strip-danger"
@@ -1122,9 +1127,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
               aria-label="Remove measure"
               title="Remove measure"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M3 4.5h10M6.5 4.2V2.8h3v1.4M4.7 4.5l.6 8.7h5.4l.6-8.7" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <IconTrash size={15} />
             </button>
             <button
               className="strip-mini"
@@ -1134,7 +1137,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
             >
               <SoundIcon size={14} />
             </button>
-            <button className="strip-mini strip-close" onClick={() => setSel(null)} aria-label="Done editing">✕</button>
+            <button className="strip-mini strip-close" onClick={() => setSel(null)} aria-label="Done editing"><IconClose size={13} /></button>
           </div>
           <div className="strip-row strip-scroll">
             {pickingTo ? (
@@ -1167,11 +1170,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
 
       <footer className="transport">
         <button className="play-btn" onClick={togglePlay} aria-label={playing ? "Stop" : "Play song"}>
-          {playing ? (
-            <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="currentColor" /></svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 20 20"><path d="M5 3.5v13l11-6.5z" fill="currentColor" /></svg>
-          )}
+          {playing ? <IconStop size={18} /> : <IconPlay size={24} />}
         </button>
         <button
           className={`metro-btn ${countIn ? "metro-on" : ""}`}
@@ -1180,7 +1179,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           aria-label="Toggle count-in"
           title="Count-in"
         >
-          <span className="countin-label">1·2</span>
+          <IconCountIn size={21} />
         </button>
         <button className="inst-btn" onClick={() => setSoundOpen(true)} aria-label="Sound settings" title="Sound">
           <SoundIcon size={17} />
@@ -1636,7 +1635,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
                 }
                 aria-label={`Remove tag ${t}`}
               >
-                {t} ✕
+                {t} <IconClose size={10} />
               </button>
             ))}
             {(allTags ?? [])
@@ -1648,7 +1647,7 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
                   onClick={() => editDoc((d) => ({ ...d, tags: cleanTags([...(d.tags ?? []), t]) }), "tags")}
                   aria-label={`Add tag ${t}`}
                 >
-                  ＋ {t}
+                  <IconAdd size={10} /> {t}
                 </button>
               ))}
           </div>

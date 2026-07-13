@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import Sheet from "./sheets/Sheet";
 import { invalidatePlaylists } from "../lib/appCache";
+import { IconAdd, IconBack, IconClose, IconMoveDown, IconMoveUp, IconShare } from "./icons";
 
 // Playlist manager — a small member-only island. Every mutation autosaves
 // (debounced) through the member-scoped playlist API, mirroring the song
@@ -137,7 +138,7 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
   return (
     <div className="editor pl-editor">
       <header className="ed-head">
-        <Link className="back" href="/playlists" aria-label="Back to playlists">‹</Link>
+        <Link className="back" href="/playlists" aria-label="Back to playlists"><IconBack size={22} /></Link>
         <input
           className="title-input"
           value={title}
@@ -150,9 +151,7 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
           aria-label="Share playlist"
           title="Share playlist"
         >
-          <svg width="17" height="17" viewBox="0 0 17 17">
-            <path d="M8.5 1.5v9M5 4.5l3.5-3 3.5 3M3.5 8v6h10V8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <IconShare size={18} />
         </button>
         <button className="save-btn save-quiet" disabled aria-label={saving || dirty ? "Saving" : "Saved"}>
           <span className={`sync-dot ${saving || dirty ? "sync-busy" : ""}`} />
@@ -181,13 +180,13 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
                   </span>
                 </Link>
                 <span className="pl-actions">
-                  <button className="pl-btn" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">↑</button>
-                  <button className="pl-btn" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label="Move down">↓</button>
+                  <button className="pl-btn" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up"><IconMoveUp size={16} /></button>
+                  <button className="pl-btn" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label="Move down"><IconMoveDown size={16} /></button>
                   <button
                     className="pl-btn pl-remove"
                     onClick={() => edit(() => setIds(ids.filter((id) => id !== s._id)))}
                     aria-label={`Remove ${s.title}`}
-                  >✕</button>
+                  ><IconClose size={14} /></button>
                 </span>
               </div>
             </li>
@@ -196,7 +195,7 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
       )}
 
       <div className="new-song-row">
-        <button className="new-song pl-add" onClick={() => setAddOpen(true)}>＋ Add songs</button>
+        <button className="new-song pl-add" onClick={() => setAddOpen(true)}><IconAdd size={13} /> Add songs</button>
       </div>
 
       <div className="pl-danger">
@@ -225,7 +224,7 @@ export default function PlaylistEditor({ playlistId, initial, songs }: Props) {
                       {s.parts} · {s.measures} measures · {s.bpm} BPM
                     </span>
                   </span>
-                  <span className="s-key">＋</span>
+                  <span className="s-key"><IconAdd size={13} /></span>
                 </button>
               </li>
             ))}

@@ -22,6 +22,9 @@ autosave rules), so check whether your change invalidates any of them.
   (`/s/`, `/p/`), landing and `/help` stay SSR.
 - `src/lib/appCache.ts` — session in-memory cache (member via `/api/me`,
   songs, playlists) + login redirect helper; invalidate on mutations
+- `src/components/icons.tsx` — the shared SVG icon set (24×24 grid, stroke,
+  currentColor). All UI icons come from here — no inline SVGs or unicode
+  glyphs as icons in components
 - `src/components/SongList.tsx` / `PlaylistList.tsx` — list routes
 - `src/components/SongEditor.tsx` — the editor island (state, selection,
   playback scheduling, autosave, undo/redo, sheets orchestration)

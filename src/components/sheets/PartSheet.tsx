@@ -3,6 +3,7 @@ import type { SongDocV2 } from "../../lib/songModel";
 import { clampRepeat, partAt, placementCount } from "../../lib/songModel";
 import { SECTION_NAMES } from "../../lib/theory";
 import SoundOverrideRows from "./SoundOverrideRows";
+import { IconAdd, IconDuplicate, IconLoop, IconMoveDown, IconMoveUp, IconUseAgain } from "../icons";
 
 interface PartProps {
   doc: SongDocV2;
@@ -98,11 +99,11 @@ export function PartSheet({
       />
 
       <div className="part-actions">
-        <button className="part-btn" disabled={ai === 0} onClick={() => onMove(-1)}>↑ Move up</button>
-        <button className="part-btn" disabled={ai === doc.arrangement.length - 1} onClick={() => onMove(1)}>↓ Move down</button>
-        <button className="part-btn" onClick={onAddLine}>＋ Add line</button>
-        <button className="part-btn" onClick={onAddPlacement}>⇊ Use again below</button>
-        <button className="part-btn" onClick={onDuplicateAsNew}>⧉ Duplicate as new</button>
+        <button className="part-btn" disabled={ai === 0} onClick={() => onMove(-1)}><IconMoveUp size={13} /> Move up</button>
+        <button className="part-btn" disabled={ai === doc.arrangement.length - 1} onClick={() => onMove(1)}><IconMoveDown size={13} /> Move down</button>
+        <button className="part-btn" onClick={onAddLine}><IconAdd size={13} /> Add line</button>
+        <button className="part-btn" onClick={onAddPlacement}><IconUseAgain size={13} /> Use again below</button>
+        <button className="part-btn" onClick={onDuplicateAsNew}><IconDuplicate size={13} /> Duplicate as new</button>
       </div>
 
       <div className="sheet-actions">
@@ -193,10 +194,10 @@ export function LineSheet({
         onSetPat={onSetPat}
       />
       <div className="part-actions">
-        <button className="part-btn" disabled={line.measures.length === 0} onClick={onLoop}>⟳ Loop this line</button>
-        <button className="part-btn" disabled={li === 0} onClick={() => onMove(-1)}>↑ Move up</button>
-        <button className="part-btn" disabled={li === at.part.lines.length - 1} onClick={() => onMove(1)}>↓ Move down</button>
-        <button className="part-btn" onClick={onDuplicate}>⧉ Duplicate</button>
+        <button className="part-btn" disabled={line.measures.length === 0} onClick={onLoop}><IconLoop size={13} /> Loop this line</button>
+        <button className="part-btn" disabled={li === 0} onClick={() => onMove(-1)}><IconMoveUp size={13} /> Move up</button>
+        <button className="part-btn" disabled={li === at.part.lines.length - 1} onClick={() => onMove(1)}><IconMoveDown size={13} /> Move down</button>
+        <button className="part-btn" onClick={onDuplicate}><IconDuplicate size={13} /> Duplicate</button>
       </div>
       <div className="sheet-actions">
         <button className="remove-chord" disabled={at.part.lines.length <= 1} onClick={onDelete}>
@@ -227,7 +228,7 @@ export function AddPartSheet({ doc, onNewPart, onReuse, onClose }: AddProps) {
         ))}
       </div>
       <div className="sheet-actions">
-        <button className="part-btn" onClick={onNewPart}>＋ New empty part</button>
+        <button className="part-btn" onClick={onNewPart}><IconAdd size={13} /> New empty part</button>
         <button className="sheet-done" onClick={onClose}>Cancel</button>
       </div>
     </Sheet>
