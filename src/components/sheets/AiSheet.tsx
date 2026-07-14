@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import Sheet from "./Sheet";
-import type { AiSong } from "../../lib/ai";
+import { askAi, transcribeAudio, type AiSong } from "../../lib/ai";
 
 // One-shot AI assistant: type (or dictate) an ask, get one text answer, and —
 // when the model edited the song — the change is applied as a single undoable
-// edit. No chat history; each ask sends the current song fresh.
+// edit. No chat history; each ask sends the current song fresh. Talks to the
+// ai-gateway straight from the browser (see lib/ai.ts for why).
 
 interface Props {
   getSong: () => AiSong; // captured at submit time, not at open time
@@ -56,17 +57,11 @@ export default function AiSheet({ getSong, onApply, onClose }: Props) {
           for (let i = 0; i < bytes.length; i += 0x8000) {
             bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
           }
-          const res = await fetch("/api/ai/transcribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              base64Audio: btoa(bin),
-              fileName: (r.mimeType || "").includes("mp4") ? "ask.m4a" : "ask.webm",
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error);
-          if (data.text) setAsk((a) => (a ? `${a} ` : "") + data.text);
+          const text = await transcribeAudio(
+            btoa(bin),
+            (r.mimeType || "").includes("mp4") ? "ask.m4a" : "ask.webm"
+          );
+          if (text) setAsk((a) => (a ? `${a} ` : "") + text);
         } catch (e: any) {
           setError(e?.message || "Couldn't transcribe — type instead.");
         }
@@ -88,16 +83,10 @@ export default function AiSheet({ getSong, onApply, onClose }: Props) {
     setReply(null);
     setApplied(false);
     try {
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, song: getSong() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await askAi(message, getSong());
       setReply(data.reply || "Done.");
       if (data.song) {
-        onApply(data.song);
+        onApply({ ...(data.song as AiSong) });
         setApplied(true);
       }
     } catch (e: any) {

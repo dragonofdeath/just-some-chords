@@ -1,6 +1,10 @@
-// AI song assistant — shared config. The server (`/api/ai/*`) is the real
-// gate; the client only uses the whitelist to decide whether to show the
-// button. Experimental: whitelisted accounts only.
+// AI song assistant — the browser talks to the ideju-sukurys ai-gateway
+// DIRECTLY (it reflects CORS for any origin). No server hop: the site-host
+// kills API routes long before a full-song generation finishes, and the
+// gateway is reachable from the Wix network only — which is also its real
+// access gate. The whitelist below just decides who sees the button.
+// Experimental: whitelisted accounts only.
+import helpDoc from "../content/help.md?raw";
 
 export const AI_WHITELIST = ["vaidask@wix.com"];
 
@@ -17,6 +21,11 @@ export interface AiSong {
   timeSignature: string;
   doc: unknown; // SongDocV2 — migrateSong coerces whatever comes back
 }
+
+const GATEWAY = "https://bo.wix.com/_api/ideju-ai-gateway";
+const MODEL = "CLAUDE_5_SONNET_1_0";
+const MAX_TOKENS = 16000;
+const ASK_TIMEOUT_MS = 115_000; // the gateway itself allows 120s
 
 // The song format, hand-written for the system prompt. Kept deliberately
 // compact; migrateSong forgives small mistakes, but idx semantics must be
@@ -82,3 +91,104 @@ Chord: { "idx": 0-11, "quality": "maj"|"min", "ext"?: string }
     "dim" "aug" "5" "dim7" "7sus4" "sus2" "sus4" ignore quality (root-only);
     minor + "7b5" is the half-diminished (m7♭5).
 `.trim();
+
+function systemPrompt(song: AiSong): string {
+  return [
+    "You are the song assistant inside Just Some Chords, a mobile songwriting app",
+    "built on a circle-of-fifths chord wheel. The user is editing one song and",
+    "sends you one message; you get exactly one reply (no follow-up turns).",
+    "",
+    "You can do two things, separately or together:",
+    "1. Answer questions — about the song, harmony/theory, or how to do",
+    "   something in the app (the app's help page is included below).",
+    "2. Edit the song — when the user asks for a change, apply it.",
+    "",
+    "Reply format (strict):",
+    "- Start with a short plain-text answer (a few sentences, no markdown",
+    "  headings). Mention what you changed and why it works musically.",
+    "- If and ONLY if you changed the song, end the reply with one fenced",
+    "  ```json block containing the COMPLETE updated song object (the full",
+    "  shape below — not a fragment, not a diff), as compact single-line",
+    "  JSON. No text after the block.",
+    "- Never edit when the user only asked a question.",
+    "",
+    "Editing rules:",
+    "- Preserve everything the user didn't ask to change (ids, notes, tags,",
+    "  playback settings, custom patterns).",
+    "- Remember parts are shared by reference in the arrangement: editing a",
+    "  part edits every placement of it.",
+    "",
+    "## Song format",
+    "",
+    SONG_FORMAT_SPEC,
+    "",
+    "## The user's current song",
+    "",
+    "```json",
+    JSON.stringify(song),
+    "```",
+    "",
+    "## App help page (for how-do-I questions)",
+    "",
+    helpDoc,
+  ].join("\n");
+}
+
+// Split the model's reply into prose + the trailing ```json block, if any.
+function splitReply(text: string): { reply: string; song?: unknown } {
+  const m = /```json\s*([\s\S]*?)```\s*$/.exec(text);
+  if (!m) return { reply: text.trim() };
+  try {
+    return { reply: text.slice(0, m.index).trim(), song: JSON.parse(m[1]) };
+  } catch {
+    // Malformed JSON — surface the prose, drop the broken edit.
+    return { reply: text.slice(0, m.index).trim() };
+  }
+}
+
+/** One-shot ask. Throws with a user-facing message on failure. */
+export async function askAi(message: string, song: AiSong): Promise<{ reply: string; song?: unknown }> {
+  let res: Response;
+  try {
+    res = await fetch(`${GATEWAY}/generate-by-object`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+      body: JSON.stringify({
+        prompt: {
+          invokeAnthropicModelRequest: {
+            model: MODEL,
+            maxTokens: MAX_TOKENS,
+            systemPrompt: [{ text: systemPrompt(song) }],
+            messages: [{ role: "USER", content: [{ textContent: { text: message.slice(0, 4000) } }] }],
+          },
+        },
+      }),
+    });
+  } catch {
+    throw new Error("Couldn't reach the assistant — it needs the Wix network (VPN).");
+  }
+  if (!res.ok) throw new Error(`The assistant couldn't answer (gateway ${res.status}) — try again.`);
+  const data = await res.json();
+  const text = data?.content?.response?.generatedTexts?.[0];
+  if (typeof text !== "string" || !text.trim()) throw new Error("The assistant gave an empty answer — try again.");
+  return splitReply(text);
+}
+
+/** Whisper speech-to-text for the mic button. Throws on failure. */
+export async function transcribeAudio(base64Audio: string, fileName: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(`${GATEWAY}/transcribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(60_000),
+      body: JSON.stringify({ base64Audio, fileName }),
+    });
+  } catch {
+    throw new Error("Couldn't reach the assistant — it needs the Wix network (VPN).");
+  }
+  if (!res.ok) throw new Error(`Couldn't transcribe (gateway ${res.status}) — type instead.`);
+  const data = await res.json();
+  return String(data?.content?.openAiTranscriptionResponse?.text ?? "").trim();
+}
