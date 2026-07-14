@@ -47,7 +47,7 @@ import {
   type ModeId,
 } from "../lib/theory";
 import PartView, { type Sel } from "./PartView";
-import { invalidateSongs } from "../lib/appCache";
+import { fetchMember, invalidateSongs } from "../lib/appCache";
 import MeasureSettingsSheet from "./sheets/MeasureSettingsSheet";
 import SoundSheet from "./sheets/SoundSheet";
 import PatternEditorSheet, { type PatternDraft } from "./sheets/PatternEditorSheet";
@@ -56,6 +56,8 @@ import SplitSheet from "./sheets/SplitSheet";
 import TempoSheet from "./sheets/TempoSheet";
 import { AddPartSheet, LineSheet, PartSheet } from "./sheets/PartSheet";
 import Sheet from "./sheets/Sheet";
+import AiSheet from "./sheets/AiSheet";
+import { aiAllowed, type AiSong } from "../lib/ai";
 import {
   IconAdd,
   IconBack,
@@ -222,6 +224,8 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   const [shareBusy, setShareBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [, setHistVer] = useState(0); // re-render undo/redo disabled state
+  const [aiOn, setAiOn] = useState(false); // whitelisted account (server re-checks)
+  const [aiOpen, setAiOpen] = useState(false);
 
   const playTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playBus = useRef<GainNode | null>(null);
@@ -338,6 +342,20 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   }, []);
 
   useEffect(() => () => stop(), []);
+
+  // AI assistant is whitelisted-only for now; the button hides for everyone
+  // else (the /api/ai routes enforce the same list server-side).
+  useEffect(() => {
+    let dead = false;
+    fetchMember()
+      .then((m) => {
+        if (!dead) setAiOn(aiAllowed(m?.email));
+      })
+      .catch(() => {});
+    return () => {
+      dead = true;
+    };
+  }, []);
 
   // Finish a save that was interrupted by the login redirect (see save()).
   useEffect(() => {
@@ -912,6 +930,26 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
     clearTransient();
   };
 
+  // Apply an AI edit as ONE undoable step. migrateSong coerces the doc — the
+  // model's JSON is treated exactly like untrusted CMS content; top-level
+  // fields fall back to the current values when they come back invalid.
+  const applyAiSong = (s: AiSong) => {
+    edit((prev) => ({
+      ...prev,
+      title: typeof s.title === "string" && s.title.trim() ? s.title.slice(0, 200) : prev.title,
+      songKey: FIFTHS.some((e) => e.maj === s.songKey) ? s.songKey : prev.songKey,
+      bpm:
+        typeof s.bpm === "number" && Number.isFinite(s.bpm)
+          ? Math.min(220, Math.max(40, Math.round(s.bpm)))
+          : prev.bpm,
+      timeSignature: (TIME_SIGNATURES as readonly string[]).includes(s.timeSignature)
+        ? s.timeSignature
+        : prev.timeSignature,
+      sections: migrateSong(s.doc),
+    }));
+    clearTransient();
+  };
+
   return (
     <div className="editor">
       <header className="ed-head">
@@ -1184,6 +1222,11 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
         <button className="inst-btn" onClick={() => setSoundOpen(true)} aria-label="Sound settings" title="Sound">
           <SoundIcon size={17} />
         </button>
+        {aiOn && (
+          <button className="inst-btn ai-btn" onClick={() => setAiOpen(true)} aria-label="AI assistant" title="AI assistant">
+            AI
+          </button>
+        )}
         <button className="t-bpm-btn" onClick={() => setTempoOpen(true)} aria-label="Change tempo">
           {song.bpm} BPM
         </button>
@@ -1191,6 +1234,20 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
           {song.timeSignature}
         </button>
       </footer>
+
+      {aiOpen && (
+        <AiSheet
+          getSong={() => ({
+            title: song.title,
+            songKey: song.songKey,
+            bpm: song.bpm,
+            timeSignature: song.timeSignature,
+            doc,
+          })}
+          onApply={applyAiSong}
+          onClose={() => setAiOpen(false)}
+        />
+      )}
 
       {splitOpen && selPos && selMeasure && (
         <SplitSheet

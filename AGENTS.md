@@ -44,6 +44,16 @@ autosave rules), so check whether your change invalidates any of them.
   add/reorder/remove songs, share, delete)
 - `src/pages/api/*` — song + playlist CRUD (member session rides
   automatically) and the elevated public share read
+- `src/lib/ai.ts` + `src/pages/api/ai/*` + `src/components/sheets/AiSheet.tsx`
+  — one-shot AI song assistant (whitelisted accounts only, list in `ai.ts`;
+  the API routes enforce it). Goes through the ideju-sukurys ai-gateway
+  (`bo.wix.com/_api/ideju-ai-gateway`, hardcoded on purpose — public repo,
+  internal-network service): `/generate-by-object` (Sonnet 5) for the
+  completion, `/transcribe` (Whisper) for the mic. The model returns prose +
+  optionally one ```json block with the FULL updated song; `migrateSong`
+  coerces the doc client-side (no zod/JSON-schema — one sanitizer, one place).
+  The system prompt embeds `SONG_FORMAT_SPEC` and `help.md?raw` — keep the
+  spec in sync when the song model changes
 - Playlists: `playlists` collection (title, `songIds.list`, shareId),
   member-scoped like `songs`; public pages `/p/[shareId]` (list) and
   `/p/[shareId]/[songId]` (editor fork) read elevated, gated by the shareId

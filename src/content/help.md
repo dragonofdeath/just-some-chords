@@ -164,6 +164,17 @@ Sound settings are part of the song, so they travel with sharing.
   same rules as single-song sharing: they get copies, your originals are
   never touched. *Stop sharing* revokes the link immediately.
 
+## AI assistant (experimental)
+
+- Available to a small set of accounts for now. When enabled, an **AI**
+  button appears in the bottom transport bar.
+- It's **one ask at a time** (not a chat): type or **dictate** a request and
+  get one answer. Ask questions ("why does the chorus feel flat?", "how do I
+  loop a line?") or ask for edits ("add a bridge with a iv–I turnaround",
+  "make the verse waltz").
+- Edits are applied to your song immediately as a **single undo step** — if
+  you don't like the result, undo restores exactly what you had.
+
 ## Phone tips
 
 - **Add it like an app**: iPhone — Share → *Add to Home Screen*; desktop
