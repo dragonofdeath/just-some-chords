@@ -166,8 +166,9 @@ Sound settings are part of the song, so they travel with sharing.
 
 ## Metronome
 
-A practice metronome lives at **/metronome** (linked from *My songs*) — no
-account needed, and your setup is remembered on the device.
+A practice metronome — the **Metronome** button next to *New song* in your
+songbook (or straight at **/metronome**). No account needed, and your setup
+is remembered on the device.
 
 - **Tempo**: steppers (hold to scrub), a slider, a **TAP** pad, and the
   classic tempo markings (Largo … Presto) as one-tap presets. The big number
@@ -179,10 +180,11 @@ account needed, and your setup is remembered on the device.
   subdivisions), the drum presets (Rock, Pop 8ths, Waltz, Shuffle), or **My
   groove**: your own kick/snare/hat step grid over one bar, with accents,
   at 8th or 16th resolution. Volume lives in the same panel.
-- **Gap trainer**: the metronome plays some bars, then goes **silent** for
-  some bars, and keeps alternating — you hold the tempo through the gaps and
-  the beat dots keep moving so you can check yourself. Set how many bars
-  sound and how many stay silent. Great for tightening your internal clock.
+- **Gap trainer** (drummers call this *gap click training*): the metronome
+  plays some bars, then goes **silent** for some bars, and keeps
+  alternating — you hold the tempo through the gaps and the beat dots keep
+  moving so you can check yourself. Set how many bars sound and how many
+  stay silent. Great for tightening your internal clock.
 - The screen **stays awake** while the metronome runs.
 
 ## AI assistant (experimental)

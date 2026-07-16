@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { cache, fetchMember, fetchSongs, loginUrl } from "../lib/appCache";
 import { countMeasures, countSections, migrateSong } from "../lib/songModel";
 import { MODES } from "../lib/theory";
-import { IconAdd } from "./icons";
+import { IconAdd, IconMetronome } from "./icons";
 
 // The songbook list — SPA port of the old songs/index.astro. Renders from the
 // in-memory cache instantly when coming back from the editor, revalidates in
@@ -77,7 +77,6 @@ export default function SongList() {
         <span>{who ? `Signed in as ${who}` : " "}</span>
         <span className="whoami-links">
           <Link className="fine-link" href="/playlists">Playlists</Link>
-          <Link className="fine-link" href="/metronome">Metronome</Link>
           <a className="fine-link" href="/help">Help</a>
           <form method="POST" action="/api/auth/logout?returnUrl=/">
             <button className="logout-btn" type="submit">Log out</button>
@@ -163,6 +162,7 @@ export default function SongList() {
       )}
 
       <div className="new-song-row">
+        <Link className="new-song tool-btn" href="/metronome"><IconMetronome size={16} /> Metronome</Link>
         <Link className="new-song" href="/songs/new"><IconAdd size={13} /> New song</Link>
       </div>
     </main>

@@ -40,13 +40,13 @@ if (me) return Astro.redirect("/songs");
       </g>
     </svg>
 
-    <div>
+    <div class="cta-row">
       <a class="cta" href="/songs/new">Start writing</a>
+      <a class="cta cta-quiet" href="/metronome">Metronome</a>
     </div>
     <p class="fine">
       No account needed to write — you'll sign in when you save.<br />
       Already have a songbook? <a class="fine-link" href="/api/auth/login?returnUrl=/songs">Log in</a>
-      · <a class="fine-link" href="/metronome">Metronome</a>
       · <a class="fine-link" href="/help">How it works</a>
     </p>
   </main>

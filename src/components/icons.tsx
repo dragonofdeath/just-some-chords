@@ -92,6 +92,16 @@ export const IconMenu = (p: IconProps) => (
   </I>
 );
 
+// Not from the pack (yet) — drawn to match: 24 grid, 1.8 stroke, round caps.
+export const IconMetronome = (p: IconProps) => (
+  <I {...p} sw={1.8}>
+    <path d="M9.3 3.5h5.4a1 1 0 0 1 .97.76l3.28 14.25A1.2 1.2 0 0 1 17.78 20H6.22a1.2 1.2 0 0 1-1.17-1.49L8.33 4.26a1 1 0 0 1 .97-.76Z" />
+    <path d="m12 15 4.6-8.9" />
+    <circle cx="12" cy="15.4" r="1.1" fill="currentColor" stroke="none" />
+    <path d="M6.4 15.4h3.7m3.8 0h3.7" />
+  </I>
+);
+
 export const IconMoveDown = (p: IconProps) => (
   <I {...p} sw={1.9}><path d="M12 4v15m-5-6 5 6 5-6" /></I>
 );

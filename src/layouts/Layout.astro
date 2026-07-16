@@ -130,6 +130,20 @@ const { title = "Just Some Chords" } = Astro.props;
   .cta:active {
     background: var(--green-deep);
   }
+  .cta-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .cta-quiet {
+    background: transparent;
+    border: 1px solid var(--rule);
+    color: var(--green-deep);
+  }
+  .cta-quiet:active {
+    background: var(--rule-soft);
+  }
   .landing .fine {
     margin-top: 16px;
     font-size: 13px;
@@ -310,9 +324,15 @@ const { title = "Just Some Chords" } = Astro.props;
   .new-song-row {
     padding: 0 16px 30px;
     margin-top: auto;
+    display: flex;
+    gap: 10px;
   }
   .new-song {
-    display: block;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
     text-align: center;
     background: var(--green);
     color: var(--paper-raised);
@@ -321,6 +341,14 @@ const { title = "Just Some Chords" } = Astro.props;
     text-decoration: none;
     border-radius: 999px;
     padding: 15px;
+  }
+  /* secondary tool button next to the primary action */
+  .tool-btn {
+    flex: 0 0 auto;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    color: var(--green-deep);
+    padding: 15px 20px;
   }
   .load-error {
     margin: 16px 22px;
