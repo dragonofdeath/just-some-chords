@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ensureLoaded, preload, type Instrument } from "../lib/sampler";
 import { clickAt, ensureCtx, killBus, playChordAt, playMidiAt } from "../lib/audio";
+import { disableWakeLock, enableWakeLock } from "../lib/wakeLock";
 import { playDrum } from "../lib/drums";
 import { buildTimeline } from "../lib/timeline";
 import { chordPatternEvents } from "../lib/patterns";
@@ -233,7 +234,6 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   const playPosRef = useRef<Pos | null>(null);
   const playingRef = useRef(false);
   const previewBus = useRef<GainNode | null>(null);
-  const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
   const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
   const past = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
   const future = useRef<Omit<SavedSong, "_id" | "shareId">[]>([]);
@@ -526,39 +526,13 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
   };
 
   // ---------- playback ----------
-  // Keep the screen awake while the song plays (long practice loops).
-  const acquireWakeLock = async () => {
-    try {
-      wakeLock.current = await (navigator as any).wakeLock?.request("screen");
-    } catch {
-      // unsupported or denied — the screen may sleep, playback still runs
-    }
-  };
-  const releaseWakeLock = () => {
-    try {
-      wakeLock.current?.release();
-    } catch {
-      // already released
-    }
-    wakeLock.current = null;
-  };
-
-  useEffect(() => {
-    const onVis = () => {
-      // the OS drops the lock when the tab hides — re-acquire on return
-      if (document.visibilityState === "visible" && playingRef.current) acquireWakeLock();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
-
   const stop = () => {
     if (playTimer.current) clearTimeout(playTimer.current);
     playTimer.current = null;
     killBus(playBus.current);
     playBus.current = null;
     playingRef.current = false;
-    releaseWakeLock();
+    disableWakeLock();
     setPlaying(false);
     setPlayPos(null);
   };
@@ -573,7 +547,10 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
       startPos: opts.startPos,
       countIn: opts.countIn,
     });
-    if (!tl.ticks.length) return;
+    if (!tl.ticks.length) {
+      disableWakeLock(); // togglePlay armed it inside the tap; nothing to play
+      return;
+    }
     // Give samples up to 2s to decode; past that, play starts on the synth.
     const wanted: Promise<void>[] = [ensureLoaded(ctx, instrument)];
     if (doc.playback?.bass) wanted.push(ensureLoaded(ctx, "bass"));
@@ -624,7 +601,6 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
 
     playingRef.current = true;
     setPlaying(true);
-    acquireWakeLock();
     let k = 0;
     let pass = 0;
     const tick = () => {
@@ -652,6 +628,9 @@ export default function SongEditor({ songId, initialSong, source = "member", bac
 
   const togglePlay = () => {
     if (playing) return stop();
+    // Inside the tap, before any await — iOS rejects wake-lock requests made
+    // outside a fresh user gesture (the old post-decode call site did that).
+    enableWakeLock();
     const loopMode = !!sel && sel.b > sel.a;
     startPlayback({
       loop: loopMode ? sel! : undefined,

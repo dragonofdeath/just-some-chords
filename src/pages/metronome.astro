@@ -1,0 +1,11 @@
+---
+import Layout from "../layouts/Layout.astro";
+import App from "../components/App";
+
+// SPA shell for the metronome tool — no server data, no login gate (the
+// metronome keeps its settings in localStorage).
+---
+
+<Layout title="Metronome — Just Some Chords">
+  <App client:only="react" />
+</Layout>

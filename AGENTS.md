@@ -37,6 +37,16 @@ autosave rules), so check whether your change invalidates any of them.
   the `songs` CMS collection — no schema changes needed for new fields, but
   every new field needs sanitizing in `migrateSong`
 - `src/lib/timeline.ts` — pure timeline builder (the playback engine input)
+- `src/components/Metronome.tsx` + `sheets/DrumKitSheet.tsx` +
+  `src/lib/metronome.ts` — the metronome tool (`/metronome`, SPA route, no
+  login gate, settings in localStorage): classic face, drum-machine engine
+  (click subdivisions / drums.ts presets / custom kick-snare-hat grid), gap
+  trainer (N bars of sound, M bars silent)
+- `src/lib/wakeLock.ts` — screen wake lock used by song playback and the
+  metronome. MUST be enabled synchronously inside the user's tap (iOS rejects
+  requests outside a fresh gesture); falls back to a muted looping video when
+  the Wake Lock API is missing/denied/released (broken in iOS home-screen
+  apps until iOS 18.4 — WebKit bug 254545)
 - `src/lib/patterns.ts` / `drums.ts` / `theory.ts` / `audio.ts` /
   `sampler.ts` — rhythm generators, drum synth, music theory, Web Audio,
   sample banks (`public/samples`, CC-BY tonejs-instruments)

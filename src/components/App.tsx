@@ -4,6 +4,7 @@ import SongList from "./SongList";
 import PlaylistList from "./PlaylistList";
 import SongEditor from "./SongEditor";
 import PlaylistEditor from "./PlaylistEditor";
+import Metronome from "./Metronome";
 import { countMeasures, countSections, migrateSong } from "../lib/songModel";
 import { fetchSongs, loginUrl, playlistFromCache, songFromCache } from "../lib/appCache";
 
@@ -149,6 +150,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/songs\/?$/, "My songs — Just Some Chords"],
   [/^\/playlists\/?$/, "My playlists — Just Some Chords"],
   [/^\/playlists\//, "Playlist — Just Some Chords"],
+  [/^\/metronome\/?$/, "Metronome — Just Some Chords"],
 ];
 
 export default function App() {
@@ -168,6 +170,9 @@ export default function App() {
         <PlaylistList />
       </Route>
       <Route path="/playlists/:id">{(p) => <PlaylistRoute id={p.id!} />}</Route>
+      <Route path="/metronome">
+        <Metronome />
+      </Route>
       <Route>
         <SongList />
       </Route>

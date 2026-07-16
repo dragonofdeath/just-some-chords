@@ -77,6 +77,7 @@ export default function SongList() {
         <span>{who ? `Signed in as ${who}` : " "}</span>
         <span className="whoami-links">
           <Link className="fine-link" href="/playlists">Playlists</Link>
+          <Link className="fine-link" href="/metronome">Metronome</Link>
           <a className="fine-link" href="/help">Help</a>
           <form method="POST" action="/api/auth/logout?returnUrl=/">
             <button className="logout-btn" type="submit">Log out</button>

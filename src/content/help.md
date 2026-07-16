@@ -164,6 +164,27 @@ Sound settings are part of the song, so they travel with sharing.
   same rules as single-song sharing: they get copies, your originals are
   never touched. *Stop sharing* revokes the link immediately.
 
+## Metronome
+
+A practice metronome lives at **/metronome** (linked from *My songs*) — no
+account needed, and your setup is remembered on the device.
+
+- **Tempo**: steppers (hold to scrub), a slider, a **TAP** pad, and the
+  classic tempo markings (Largo … Presto) as one-tap presets. The big number
+  shows where you are — *92 · Andante*.
+- **Time signatures**: the same set as songs, 2/4 up to 12/8 — compound
+  meters accent the dotted-quarter pulse.
+- **Sound**: it's a small drum machine underneath. The button next to Play
+  picks the sound — a plain **click** (with optional 8th, triplet or 16th
+  subdivisions), the drum presets (Rock, Pop 8ths, Waltz, Shuffle), or **My
+  groove**: your own kick/snare/hat step grid over one bar, with accents,
+  at 8th or 16th resolution. Volume lives in the same panel.
+- **Gap trainer**: the metronome plays some bars, then goes **silent** for
+  some bars, and keeps alternating — you hold the tempo through the gaps and
+  the beat dots keep moving so you can check yourself. Set how many bars
+  sound and how many stay silent. Great for tightening your internal clock.
+- The screen **stays awake** while the metronome runs.
+
 ## AI assistant (experimental)
 
 - Available to a small set of accounts for now. When enabled, an **AI**
