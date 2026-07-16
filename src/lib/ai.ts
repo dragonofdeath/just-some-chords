@@ -90,6 +90,18 @@ Chord: { "idx": 0-11, "quality": "maj"|"min", "ext"?: string }
     "dim7" "7sus4" "6/9" "maj9" "11" "13" "7b5" "7#5" "7b9" "7#9".
     "dim" "aug" "5" "dim7" "7sus4" "sus2" "sus4" ignore quality (root-only);
     minor + "7b5" is the half-diminished (m7♭5).
+
+Example — split (multi-chord) measures. The verse of "Yellow Submarine"
+(The Beatles, key G, 4/4) changes chords mid-bar: | G D | C G | Em Am | C D |.
+Each bar is ONE measure with two slots, halved by div (8+8 sixteenths):
+  {"measures":[
+    {"slots":[{"idx":1,"quality":"maj"},{"idx":2,"quality":"maj"}],"div":[8,8]},
+    {"slots":[{"idx":0,"quality":"maj"},{"idx":1,"quality":"maj"}],"div":[8,8]},
+    {"slots":[{"idx":1,"quality":"min"},{"idx":0,"quality":"min"}],"div":[8,8]},
+    {"slots":[{"idx":0,"quality":"maj"},{"idx":2,"quality":"maj"}],"div":[8,8]}]}
+Uneven splits work the same way: "div":[12,4] holds the first chord for three
+beats and lands the second on beat 4; "div":[6,10] is fine too. Never model a
+mid-bar change as two separate measures — that doubles the bar count.
 `.trim();
 
 function systemPrompt(song: AiSong): string {
